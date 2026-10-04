@@ -15,3 +15,6 @@ tools/capture/*.jsonl
 .idea/
 *.user
 .claude/settings.local.json
+
+# Служебные файлы моста codex-image (задания и результаты генерации картинок)
+.codex-image/

@@ -1,5 +1,7 @@
 # KbLight — keeps the lighting of sbarda keyboards
 
+![KbLight](docs/images/banner.jpg)
+
 *[Русская версия](README.ru.md)*
 
 A small Windows tray app that keeps the RGB lighting you chose on a keyboard configured with the **sbarda** app. Lighting only — key mapping, macros and actuation stay with sbarda.
@@ -13,6 +15,8 @@ Tested on **ZORNER ZH99 HE** (Hall Effect, USB `19F5:FB2A`). Other sbarda keyboa
 - sbarda's own autostart is broken: it adds a startup entry for `G68 Ultra.exe`, a file that does not exist, so Windows reports a missing program at every sign-in.
 
 KbLight writes your lighting to the keyboard when you sign in to Windows, when the keyboard is plugged in, after sleep and whenever you change it in its window. Every write is read back and checked.
+
+<p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="402"></p>
 
 ## Install
 

@@ -44,7 +44,7 @@ You do not need sbarda running for the lighting. If you open it for other settin
 
 ## Updates
 
-The window shows the version ("KbLight 1.1.0"); `KbLight.exe --version | Write-Output` prints it in PowerShell.
+The window shows the version ("KbLight 1.2.0"); `KbLight.exe --version | Write-Output` prints it in PowerShell.
 
 While the tray is running, KbLight asks GitHub for the latest release a minute after it starts and then once a day. If there is a newer one, the window shows a "version N is available" link and Windows shows a notification once; both open the release page. Nothing is downloaded or installed automatically: to update, exit KbLight, replace `KbLight.exe` with the new one and start it.
 

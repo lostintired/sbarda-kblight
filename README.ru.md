@@ -44,7 +44,7 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupAppro
 
 ## Обновления
 
-Окно показывает версию («KbLight 1.1.0»); в PowerShell её печатает `KbLight.exe --version | Write-Output`.
+Окно показывает версию («KbLight 1.2.0»); в PowerShell её печатает `KbLight.exe --version | Write-Output`.
 
 Пока трей работает, KbLight через минуту после запуска и затем раз в сутки спрашивает GitHub о последнем релизе. Если он новее, в окне появляется ссылка «доступна версия N», а Windows один раз показывает уведомление; оба открывают страницу релиза. Ничего не скачивается и не ставится само: чтобы обновиться, выйдите из KbLight, замените `KbLight.exe` новым и запустите.
 

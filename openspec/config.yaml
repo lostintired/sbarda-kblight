@@ -22,7 +22,7 @@ context: |
   Протокол клавиатуры восстановлен разбором sbarda.exe 1.0.0.0 и описан в docs/PROTOCOL.md с
   пометками: проверено на устройстве / выведено из кода sbarda.exe / не расшифровано.
   Источники: поведение — openspec/specs/; устройство программы — docs/ARCHITECTURE.md;
-  решения — docs/ADR.md; протокол — docs/PROTOCOL.md; для пользователя — README.md;
+  решения — docs/ADR.md; протокол — docs/PROTOCOL.md; для пользователя — README.md (англ.) и README.ru.md;
   правила работы — CLAUDE.md; версии — docs/CHANGELOG.md.
 
 rules:
@@ -39,7 +39,7 @@ rules:
     - Обмен с клавиатурой — вне потока окна, через очередь записи TrayApp; разовые режимы — через Keyboard.Apply с мьютексом устройства
   tasks:
     - Каждая задача заканчивается проверяемым результатом — сборка без ошибок и предупреждений, ручной сценарий с ожидаемой строкой журнала или чтение блока через tools/kbtool.py
-    - Последняя группа задач — документы (docs/CHANGELOG.md; README.md, если поменялось видимое пользователю; docs/ARCHITECTURE.md и docs/PROTOCOL.md, если поменялись устройство программы или протокол)
+    - Последняя группа задач — документы (docs/CHANGELOG.md; README.md и README.ru.md, если поменялось видимое пользователю; docs/ARCHITECTURE.md и docs/PROTOCOL.md, если поменялись устройство программы или протокол)
 
 operations:
   apply:
@@ -50,4 +50,4 @@ operations:
       - Рабочую установку в %LOCALAPPDATA%\Programs\KbLight обновлять только по просьбе пользователя
   archive:
     guidance:
-      - Перед архивом сверить README.md, docs/ARCHITECTURE.md, docs/PROTOCOL.md и docs/CHANGELOG.md с поведением из спек; разошлись — назвать где
+      - Перед архивом сверить README.md, README.ru.md, docs/ARCHITECTURE.md, docs/PROTOCOL.md и docs/CHANGELOG.md с поведением из спек; разошлись — назвать где

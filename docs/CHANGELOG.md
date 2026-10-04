@@ -2,7 +2,7 @@
 
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [семантические](https://semver.org/lang/ru/): мажор — ломающее изменение (например, `settings.json`, который старая версия не прочтёт), минор — новая функция, патч — только исправления. Номер версии — `<Version>` в `src/KbLight.csproj`.
 
-## [Не выпущено]
+## [1.1.0] — 2026-10-04
 
 ### Изменено
 
@@ -19,6 +19,7 @@
 
 ### Документация
 
+- `README.md` по-английски для всех владельцев клавиатур sbarda (симптомы, установка, SmartScreen, сломанный автозапуск sbarda, оговорка), русский — `README.ru.md`; лицензия MIT — `LICENSE`.
 - Проект переведён на OpenSpec: базовые спецификации поведения в `openspec/specs/` (8 capability), `openspec/config.yaml`, `docs/ARCHITECTURE.md`, `docs/PROTOCOL.md`, `docs/ADR.md`, `CLAUDE.md`, `AGENTS.md`. Поведение программы не менялось.
 - Инструменты исследования протокола перенесены в проект: `tools/kbtool.py`, `tools/capture/`.
 

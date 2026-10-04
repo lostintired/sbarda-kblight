@@ -19,9 +19,9 @@ sealed class SettingsForm : Form
     };
     readonly Label _speedValue = new() { AutoSize = true, Anchor = AnchorStyles.Left };
     readonly Button _color = new() { FlatStyle = FlatStyle.Flat, Size = new Size(56, 26), Margin = new Padding(3, 3, 12, 3) };
-    readonly CheckBox _multicolor = new() { Text = "Разноцветный", AutoSize = true, Anchor = AnchorStyles.Left };
-    readonly CheckBox _reverse = new() { Text = "Обратное направление", AutoSize = true };
-    readonly CheckBox _autostart = new() { Text = "Запускать при входе в Windows", AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
+    readonly CheckBox _multicolor = new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
+    readonly CheckBox _reverse = new() { Text = KbLight.Text.ReverseDirection, AutoSize = true };
+    readonly CheckBox _autostart = new() { Text = KbLight.Text.StartWithWindows, AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
     readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(380, 0), Margin = new Padding(3, 8, 3, 3) };
     bool _loading;
 
@@ -35,7 +35,7 @@ sealed class SettingsForm : Form
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "Подсветка клавиатуры";
+        Text = KbLight.Text.AppTitle;
         Icon = AppFiles.LoadIcon(32);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
@@ -44,11 +44,11 @@ sealed class SettingsForm : Form
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(12);
 
-        var close = new Button { Text = "Закрыть", AutoSize = true, Anchor = AnchorStyles.Right };
+        var close = new Button { Text = KbLight.Text.Close, AutoSize = true, Anchor = AnchorStyles.Right };
         close.Click += (_, _) => Close();
         CancelButton = close;
-        var log = NewLink("Журнал", OpenLog);
-        var models = NewLink("Модели", OpenModels);
+        var log = NewLink(KbLight.Text.LogLink, OpenLog);
+        var models = NewLink(KbLight.Text.ModelsLink, OpenModels);
         var links = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
         links.Controls.AddRange([log, models]);
 
@@ -65,10 +65,10 @@ sealed class SettingsForm : Form
         grid.Controls.Add(_model, 0, grid.RowCount);
         grid.SetColumnSpan(_model, 3);
         grid.RowCount++;
-        AddRow(grid, "Эффект", _effect, span: 2);
-        AddRow(grid, "Яркость", _brightness, _brightnessValue);
-        AddRow(grid, "Скорость", _speed, _speedValue);
-        AddRow(grid, "Цвет", colorRow, span: 2);
+        AddRow(grid, KbLight.Text.EffectCaption, _effect, span: 2);
+        AddRow(grid, KbLight.Text.BrightnessCaption, _brightness, _brightnessValue);
+        AddRow(grid, KbLight.Text.SpeedCaption, _speed, _speedValue);
+        AddRow(grid, KbLight.Text.ColorCaption, colorRow, span: 2);
         AddRow(grid, "", _reverse, span: 2);
         AddRow(grid, "", _autostart, span: 2);
         grid.Controls.Add(_status, 0, grid.RowCount);
@@ -125,7 +125,7 @@ sealed class SettingsForm : Form
     void FillEffects()
     {
         var model = KeyboardModels.Find(_settings.Model);
-        _model.Text = "Клавиатура: " + (model?.Name ?? "не определена");
+        _model.Text = KbLight.Text.KeyboardLine(model?.Name);
         _effect.Items.Clear();
         foreach (var effect in (model ?? KeyboardModels.Default)?.Effects ?? []) _effect.Items.Add(effect);
     }
@@ -163,7 +163,7 @@ sealed class SettingsForm : Form
         _reverse.Enabled = (options & EffectOptions.AnyDirection) != 0;
 
         _brightnessValue.Text = $"{_brightness.Value}%";
-        _speedValue.Text = $"{_speed.Value + 1} из 5";
+        _speedValue.Text = KbLight.Text.SpeedValue(_speed.Value + 1);
         var color = _settings.GetColor();
         _color.BackColor = _color.Enabled ? color : Color.FromArgb(color.A, (color.R + 128) / 2, (color.G + 128) / 2, (color.B + 128) / 2);
         _color.FlatAppearance.BorderColor = SystemColors.ControlDark;

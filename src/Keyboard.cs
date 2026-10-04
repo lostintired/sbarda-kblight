@@ -133,12 +133,12 @@ static class Keyboard
             }
             if (results.Count == 0)
             {
-                if (unknown.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
+                if (unknown.Count == 0) return new(ApplyStatus.NotFound, Text.KeyboardNotFound);
                 string id = KeyboardModel.FormatId(SbardaVid, unknown.Min);
-                return new(ApplyStatus.Unsupported, $"клавиатура {id} не знакома программе, нужен файл модели", UnknownId: id);
+                return new(ApplyStatus.Unsupported, Text.KeyboardUnknown(id), UnknownId: id);
             }
             foreach (ushort pid in unknown)
-                Log.Write($"клавиатура {KeyboardModel.FormatId(SbardaVid, pid)} не знакома программе, пропускаю");
+                Log.Write(Text.KeyboardSkipped(KeyboardModel.FormatId(SbardaVid, pid)));
             return combine(results);
         }
         finally
@@ -150,7 +150,7 @@ static class Keyboard
     static ApplyResult ReadFrom(string path)
     {
         using var device = HidDevice.Open(path);
-        if (device is null) return new(ApplyStatus.Failed, "не удалось открыть интерфейс клавиатуры");
+        if (device is null) return new(ApplyStatus.Failed, Text.OpenFailed);
 
         byte[]? block;
         device.Command(CmdOpen);
@@ -158,14 +158,14 @@ static class Keyboard
         finally { CloseSession(device); }
 
         return block is null
-            ? new(ApplyStatus.Failed, "клавиатура вернула неожиданный блок настроек, настройки не взяты")
-            : new(ApplyStatus.AlreadySet, "первый запуск, взял из клавиатуры: " + LightState.Describe(block), block);
+            ? new(ApplyStatus.Failed, Text.BadBlockNotTaken)
+            : new(ApplyStatus.AlreadySet, Text.Adopted(LightState.Describe(block)), block);
     }
 
     static ApplyResult ApplyTo(string path, LightState want, bool force, byte[]? fallbackBlock)
     {
         using var device = HidDevice.Open(path);
-        if (device is null) return new(ApplyStatus.Failed, "не удалось открыть интерфейс клавиатуры");
+        if (device is null) return new(ApplyStatus.Failed, Text.OpenFailed);
 
         // Same sequence as sbarda.exe: open, read block, write block, wait, close.
         string before;
@@ -175,7 +175,7 @@ static class Keyboard
         {
             current = ReadBlock(device);
             if (current is not null && !force && want.Matches(current))
-                return new(ApplyStatus.AlreadySet, "уже стоит: " + LightState.Describe(current), current);
+                return new(ApplyStatus.AlreadySet, Text.AlreadySet(LightState.Describe(current)), current);
 
             byte[] block;
             if (current is not null)
@@ -184,12 +184,12 @@ static class Keyboard
             }
             else if (fallbackBlock is { Length: BlockLength })
             {
-                Log.Write("клавиатура вернула повреждённый блок настроек, пишу поверх последнего исправного");
+                Log.Write(Text.DamagedBlock);
                 block = fallbackBlock.ToArray();
             }
             else
             {
-                return new(ApplyStatus.Failed, "клавиатура вернула неожиданный блок настроек, запись отменена");
+                return new(ApplyStatus.Failed, Text.BadBlockCancelled);
             }
 
             before = current is null ? "?" : LightState.Describe(current);
@@ -208,8 +208,8 @@ static class Keyboard
         finally { CloseSession(device); }
 
         if (after is null || !want.Matches(after))
-            return new(ApplyStatus.Failed, "клавиатура не подтвердила запись", current);
-        return new(ApplyStatus.Written, $"было: {before}; стало: {LightState.Describe(after)}", after);
+            return new(ApplyStatus.Failed, Text.NotConfirmed, current);
+        return new(ApplyStatus.Written, Text.Written(before, LightState.Describe(after)), after);
     }
 
     /// <returns>the settings block, or null if the reply does not look like one</returns>
@@ -245,14 +245,14 @@ sealed class HidDevice : IDisposable
             Native.FileShareRead | Native.FileShareWrite, 0, Native.OpenExisting, Native.FileFlagOverlapped, 0);
         if (handle.IsInvalid)
         {
-            Log.Write($"не открылся {path}: ошибка {Marshal.GetLastPInvokeError()}");
+            Log.Write(Text.NotOpened(path, Marshal.GetLastPInvokeError()));
             handle.Dispose();
             return null;
         }
         var (input, output) = Native.ReportLengths(handle);
         if (input != ReportLength || output != ReportLength)
         {
-            Log.Write($"неожиданные размеры отчётов {input}/{output} у {path}");
+            Log.Write(Text.BadReportSizes(input, output, path));
             handle.Dispose();
             return null;
         }
@@ -277,7 +277,7 @@ sealed class HidDevice : IDisposable
         data.CopyTo(payload[8..]);
         payload[3] = Checksum(payload);
         if (Transfer(write: true, report, 1000) != ReportLength)
-            throw new IOException($"команда {cmd:X2} не отправлена");
+            throw new IOException(Text.NotSent(cmd));
 
         var input = new byte[ReportLength];
         long deadline = Environment.TickCount64 + 1000;
@@ -285,7 +285,7 @@ sealed class HidDevice : IDisposable
         {
             int left = (int)(deadline - Environment.TickCount64);
             if (left <= 0 || Transfer(write: false, input, left) < 0)
-                throw new TimeoutException($"клавиатура не ответила на команду {cmd:X2}");
+                throw new TimeoutException(Text.NoAnswer(cmd));
             if (input[1] == 0xAA && input[2] == cmd)
                 return input[1..];
         }

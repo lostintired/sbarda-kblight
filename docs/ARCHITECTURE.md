@@ -25,7 +25,8 @@
 | `src/models/*.json` | встроенные модели (ресурсы exe `KbLight.models.<файл>`); сейчас одна — `zorner-zh99-he.json` |
 | `src/SystemWatcher.cs` | скрытое окно: `WM_DEVICECHANGE` (появился интерфейс известной модели или любой `vid_19f5`) и `WM_POWERBROADCAST` (выход из сна) |
 | `src/SettingsForm.cs` | окно настроек |
-| `src/LightSettings.cs` | `LightSettings` (`settings.json`), `Effect` и таблица названий по коду, `EffectOptions` |
+| `src/LightSettings.cs` | `LightSettings` (`settings.json`), `Effect`, `EffectOptions` |
+| `src/Text.cs` | язык программы и все тексты окна, меню, состояния и журнала парами ru/en, названия эффектов по коду |
 | `src/Autostart.cs` | задача планировщика через `schtasks.exe` |
 | `src/AppFiles.cs` | пути к данным, загрузка значка, журнал `Log` |
 | `tools/kbtool.py`, `tools/capture/` | диагностика и исследование протокола (PROTOCOL §10); `kbtool.py --pid XXXX` — одна модель |
@@ -121,6 +122,10 @@
 ## 11. Журнал
 
 `Log.Write` в `AppFiles.cs`: строка `yyyy-MM-dd HH:mm:ss.fff  сообщение`, `File.AppendAllText` под блокировкой внутри процесса; файл больше 512 КБ переименовывается в `kblight.log.old`. Ошибки ввода-вывода журнала глотаются.
+
+## 11а. Язык
+
+`Text.Ru` вычисляется один раз при первом обращении: `KBLIGHT_LANG` (`ru`/`en`, без учёта регистра), иначе `CultureInfo.CurrentUICulture` — на Windows это язык интерфейса пользователя, а не региональные форматы; `ru` — русский, всё остальное — английский. Каждый текст — свойство или метод `Text` с парой строк; `.resx` и сателлитные сборки не используются (два языка, сверка со спекой `interface-language` по одному файлу). Не переводятся статусы, состояние `effect=…`, ключи, коды выхода, названия из файлов моделей и сообщения исключений Windows и .NET. Встроенные модели разбираются один раз, названия их эффектов берутся на языке процесса.
 
 ## 12. Пути
 

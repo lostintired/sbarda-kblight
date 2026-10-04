@@ -51,14 +51,14 @@ static class KeyboardModels
                 if (!taken.Add(model.Id))
                 {
                     LogOnce($"dup {model.Id} {model.File}",
-                        $"модель {model.Id} описана в нескольких файлах, беру {models.First(m => m.Id == model.Id && m.File is not null).File}");
+                        Text.ModelDuplicate(model.Id, models.First(m => m.Id == model.Id && m.File is not null).File));
                     continue;
                 }
                 int builtin = models.FindIndex(m => m.Id == model.Id);
                 if (builtin >= 0)
                 {
                     LogOnce($"replace {model.Id} {model.File} {Cache[Path.Combine(Folder, model.File!)].Time.Ticks}",
-                        $"модель {model.Id}: {model.File} заменяет встроенное описание");
+                        Text.ModelReplaces(model.Id, model.File));
                     models[builtin] = model;
                 }
                 else
@@ -105,8 +105,8 @@ static class KeyboardModels
                 try { model = Parse(File.ReadAllText(path), info.Name); }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or FormatException)
                 {
-                    string reason = e is JsonException ? "это не JSON" : e.Message;
-                    LogOnce($"bad {path} {info.LastWriteTimeUtc.Ticks} {info.Length}", $"файл модели {info.Name} не прочитан: {reason}");
+                    string reason = e is JsonException ? Text.NotJson : e.Message;
+                    LogOnce($"bad {path} {info.LastWriteTimeUtc.Ticks} {info.Length}", Text.ModelNotRead(info.Name, reason));
                 }
                 cached = (info.LastWriteTimeUtc, info.Length, model);
                 Cache[path] = cached;
@@ -136,24 +136,24 @@ static class KeyboardModels
         public List<string>? Options { get; set; }
     }
 
-    /// <exception cref="FormatException">with the reason, in Russian, for the log</exception>
+    /// <exception cref="FormatException">with the reason, in the program language, for the log</exception>
     static KeyboardModel Parse(string json, string? file)
     {
-        var data = JsonSerializer.Deserialize<ModelFile>(json, JsonOptions) ?? throw new FormatException("файл пуст");
-        if (string.IsNullOrWhiteSpace(data.Name)) throw new FormatException("нет поля name");
+        var data = JsonSerializer.Deserialize<ModelFile>(json, JsonOptions) ?? throw new FormatException(Text.FileEmpty);
+        if (string.IsNullOrWhiteSpace(data.Name)) throw new FormatException(Text.NoName);
         ushort vid = ParseId(data.Vid, "vid"), pid = ParseId(data.Pid, "pid");
-        if (data.Interface is not (>= 0 and <= 255)) throw new FormatException("interface должен быть числом 0–255");
-        if (data.Effects is not { Count: > 0 }) throw new FormatException("список effects пуст");
+        if (data.Interface is not (>= 0 and <= 255)) throw new FormatException(Text.BadInterface);
+        if (data.Effects is not { Count: > 0 }) throw new FormatException(Text.NoEffects);
 
         var effects = new List<Effect>();
         foreach (var e in data.Effects)
         {
-            if (e.Id is not (>= 0 and <= 255)) throw new FormatException("у эффекта нет id 0–255");
-            if (effects.Any(x => x.Id == e.Id)) throw new FormatException($"эффект {e.Id} повторяется");
+            if (e.Id is not (>= 0 and <= 255)) throw new FormatException(Text.BadEffectId);
+            if (effects.Any(x => x.Id == e.Id)) throw new FormatException(Text.EffectRepeated(e.Id.Value));
             EffectOptions options = 0;
             foreach (string option in e.Options ?? [])
                 options |= OptionNames.TryGetValue(option.ToLowerInvariant(), out var flag)
-                    ? flag : throw new FormatException($"неизвестный параметр {option}");
+                    ? flag : throw new FormatException(Text.UnknownOption(option));
             string name = string.IsNullOrWhiteSpace(e.Name) ? Effect.KnownName(e.Id.Value) : e.Name.Trim();
             effects.Add(new Effect(e.Id.Value, name, options));
         }
@@ -162,5 +162,5 @@ static class KeyboardModels
 
     static ushort ParseId(string? text, string field) =>
         text is { Length: 4 } && ushort.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ushort value)
-            ? value : throw new FormatException($"{field} должен быть четырьмя шестнадцатеричными цифрами");
+            ? value : throw new FormatException(Text.BadId(field));
 }

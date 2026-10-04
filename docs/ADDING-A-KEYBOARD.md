@@ -2,8 +2,9 @@
 
 KbLight only writes to keyboards it has a **model file** for. Out of the box it knows one: ZORNER ZH99 HE (USB `19F5:FB2A`). If your keyboard is configured with the sbarda app (its USB vendor ID is `19F5`) but is a different model, KbLight leaves it alone and says so:
 
-> Клавиатура 19F5:XXXX не знакома программе. Нужен файл модели — ссылка «Модели» в окне.
-> *(Keyboard 19F5:XXXX is unknown to the program. A model file is needed.)*
+> Keyboard 19F5:XXXX is unknown to the program. A model file is needed — see the "Models" link in the window.
+
+KbLight speaks English unless Windows is in Russian; below, the Russian text follows in parentheses where it differs. `KBLIGHT_LANG=en` or `ru` picks the language by hand.
 
 This guide shows how to describe your model, check that it works, and share it so that it becomes built-in for everyone.
 
@@ -14,7 +15,7 @@ What a model file can and cannot do: it tells KbLight which keyboard to talk to 
 - Your keyboard, connected by cable.
 - [Python 3](https://www.python.org/downloads/) for the helper tools in `tools/` (standard library only, nothing to install).
 - sbarda installed, or at least its database `%LOCALAPPDATA%\sbarda Files\db\*.db` left after uninstalling — optional, it only saves typing.
-- KbLight closed while you experiment: right-click the tray icon → «Выход» (Exit). The tools do not coordinate with a running KbLight. Close sbarda too.
+- KbLight closed while you experiment: right-click the tray icon → Exit («Выход»). The tools do not coordinate with a running KbLight. Close sbarda too.
 
 ## 1. Find VID:PID
 
@@ -87,23 +88,23 @@ It takes VID, PID and the interface from the connected keyboard and the effect l
 
 | Field | Meaning |
 |---|---|
-| `name` | shown in KbLight's window as «Клавиатура: …» |
+| `name` | shown in KbLight's window as "Keyboard: …" («Клавиатура: …»), as is, not translated |
 | `vid`, `pid` | four hex digits each |
 | `interface` | the number after `mi_` of the `in=65 out=65` interface |
 | `effects[].id` | effect code written to byte 8 |
 | `effects[].options` | which controls the window enables: `brightness`, `speed`, `color`, `multicolor`, and one of `direction-horizontal`, `direction-vertical`, `direction-radial`, `direction-rotation` |
-| `effects[].name` | optional; without it the name comes from the code table above |
+| `effects[].name` | optional; without it the name comes from the code table above, in the program language |
 
 A file with the same VID:PID as a built-in model replaces it — handy to fix a built-in model too.
 
 ## 5. Try it in KbLight
 
-1. Put the file into `%LOCALAPPDATA%\KbLight\models\` — the «Модели» (Models) link in KbLight's window opens that folder.
-2. Start KbLight. The window shows «Клавиатура: <your name>» and your effects. No restart is needed when you edit the file later: it is re-read on every write and when the window opens.
-3. The log («Журнал» link, `%LOCALAPPDATA%\KbLight\kblight.log`) shows what happened:
-   - `запуск программы: Written — было: …; стало: effect=…` — written and read back;
-   - `файл модели <file> не прочитан: <reason>` — the file has an error, the reason says which;
-   - `модель 19F5:XXXX: <file> заменяет встроенное описание` — your file replaced a built-in model.
+1. Put the file into `%LOCALAPPDATA%\KbLight\models\` — the Models («Модели») link in KbLight's window opens that folder.
+2. Start KbLight. The window shows "Keyboard: <your name>" and your effects. No restart is needed when you edit the file later: it is re-read on every write and when the window opens.
+3. The log (Log link, `%LOCALAPPDATA%\KbLight\kblight.log`) shows what happened:
+   - `program start: Written — was: …; now: effect=…` (`запуск программы: Written — было: …; стало: …`) — written and read back;
+   - `model file <file> not read: <reason>` (`файл модели <file> не прочитан: <причина>`) — the file has an error, the reason says which;
+   - `model 19F5:XXXX: <file> replaces the built-in description` (`модель 19F5:XXXX: <file> заменяет встроенное описание`) — your file replaced a built-in model.
 4. Go through the effects in the window and check each one on the keyboard: speed, color, multicolor, direction.
 
 ## 6. Share it

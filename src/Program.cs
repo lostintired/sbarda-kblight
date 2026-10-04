@@ -49,7 +49,7 @@ static class Program
         string mode = force ? "--apply" : "--check";
         if (!LightSettings.Exists)
         {
-            Log.Write($"{mode}: NoSettings — нет settings.json, подсветку ещё не выбирали");
+            Log.Write($"{mode}: NoSettings — {Text.NoSettings}");
             return 3;
         }
         var settings = LightSettings.Load();

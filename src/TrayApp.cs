@@ -20,7 +20,7 @@ sealed class TrayApp : ApplicationContext
     bool _autostart;
     // No settings.json yet: requests read the keyboard's lighting instead of writing ours over it.
     bool _firstRun;
-    string _status = "применяю…";
+    string _status = Text.Applying;
 
     // Applies run one at a time on a pool thread; a request queued meanwhile replaces older queued ones.
     readonly object _gate = new();
@@ -34,16 +34,16 @@ sealed class TrayApp : ApplicationContext
         _firstRun = !LightSettings.Exists;
         _settings = LightSettings.Load();
 
-        _autostartItem = new ToolStripMenuItem("Запускать при входе в Windows", null, (_, _) => SetAutostart(!_autostart));
+        _autostartItem = new ToolStripMenuItem(Text.StartWithWindows, null, (_, _) => SetAutostart(!_autostart));
         var menu = new ContextMenuStrip();
-        var settingsItem = new ToolStripMenuItem("Настройки подсветки…", null, (_, _) => ShowSettings());
+        var settingsItem = new ToolStripMenuItem(Text.SettingsMenu, null, (_, _) => ShowSettings());
         settingsItem.Font = new Font(settingsItem.Font, FontStyle.Bold);
         menu.Items.Add(settingsItem);
-        menu.Items.Add("Применить сейчас", null, (_, _) => RequestApply(force: true, "вручную"));
+        menu.Items.Add(Text.ApplyNowMenu, null, (_, _) => RequestApply(force: true, Text.ReasonManual));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autostartItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Выход", null, (_, _) => ExitThread());
+        menu.Items.Add(Text.ExitMenu, null, (_, _) => ExitThread());
 
         _tray = new NotifyIcon
         {
@@ -58,15 +58,15 @@ sealed class TrayApp : ApplicationContext
         _watcher.Resumed += () => Restart(_resumeDelay);
         // A replugged keyboard has been powered off, so it gets the lighting unconditionally;
         // after sleep it usually still has it, so only a mismatch is rewritten.
-        _arrivalDelay.Tick += (_, _) => { _arrivalDelay.Stop(); RequestApply(force: true, "клавиатура подключена", attempts: 3); };
-        _resumeDelay.Tick += (_, _) => { _resumeDelay.Stop(); RequestApply(force: false, "выход из сна", attempts: 3); };
+        _arrivalDelay.Tick += (_, _) => { _arrivalDelay.Stop(); RequestApply(force: true, Text.ReasonArrived, attempts: 3); };
+        _resumeDelay.Tick += (_, _) => { _resumeDelay.Stop(); RequestApply(force: false, Text.ReasonResumed, attempts: 3); };
         _editDelay.Tick += (_, _) => FlushEdits();
 
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal,
             (_, _) => _ui.Post(_ => ShowSettings(), null), null, Timeout.Infinite, executeOnlyOnce: false);
 
-        Log.Write($"запуск {Environment.ProcessPath}{(showSettings ? "" : " --tray")}");
-        RequestApply(force: true, "запуск программы", attempts: 6);
+        Log.Write(Text.LogStart(Environment.ProcessPath) + (showSettings ? "" : " --tray"));
+        RequestApply(force: true, Text.ReasonStartup, attempts: 6);
         Task.Run(() =>
         {
             bool enabled = Autostart.IsEnabled();
@@ -87,7 +87,7 @@ sealed class TrayApp : ApplicationContext
         _watcher.Dispose();
         _showWait.Unregister(null);
         _showSignal.Dispose();
-        Log.Write("выход");
+        Log.Write(Text.LogExit);
         base.ExitThreadCore();
     }
 
@@ -103,7 +103,7 @@ sealed class TrayApp : ApplicationContext
         _editDelay.Stop();
         _firstRun = false;
         SaveSettings();
-        RequestApply(force: true, "изменены настройки");
+        RequestApply(force: true, Text.ReasonEdited);
     }
 
     void SaveSettings()
@@ -111,7 +111,7 @@ sealed class TrayApp : ApplicationContext
         try { _settings.Save(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Log.Write("настройки не сохранены: " + e.Message);
+            Log.Write(Text.SettingsNotSaved(e.Message));
         }
     }
 
@@ -184,10 +184,10 @@ sealed class TrayApp : ApplicationContext
         _status = result.Status switch
         {
             ApplyStatus.Written or ApplyStatus.AlreadySet =>
-                $"{(adopted ? _settings : request.Settings).Describe(result.Model)} — применено в {DateTime.Now:HH:mm}",
-            ApplyStatus.NotFound => "Клавиатура не найдена. Подсветка применится, когда она подключится.",
-            ApplyStatus.Unsupported => $"Клавиатура {result.UnknownId} не знакома программе. Нужен файл модели — ссылка «Модели» в окне.",
-            _ => "Не удалось применить: " + result.Message,
+                Text.AppliedAt((adopted ? _settings : request.Settings).Describe(result.Model), DateTime.Now),
+            ApplyStatus.NotFound => Text.StatusNotFound,
+            ApplyStatus.Unsupported => Text.StatusUnsupported(result.UnknownId),
+            _ => Text.StatusFailed(result.Message),
         };
         UpdateTooltip();
         _form?.SetStatus(_status);
@@ -210,7 +210,7 @@ sealed class TrayApp : ApplicationContext
 
     void UpdateTooltip()
     {
-        string text = "Подсветка клавиатуры\n" + _status;
+        string text = Text.AppTitle + "\n" + _status;
         _tray.Text = text.Length > 127 ? text[..127] : text;
     }
 
@@ -239,14 +239,14 @@ sealed class TrayApp : ApplicationContext
         {
             if (enable) Autostart.Enable(Environment.ProcessPath!);
             else Autostart.Disable();
-            Log.Write(enable ? "автозапуск включён" : "автозапуск выключен");
+            Log.Write(enable ? Text.AutostartOn : Text.AutostartOff);
             ShowAutostart(enable);
         }
         catch (Exception e) when (e is InvalidOperationException or IOException or Win32Exception)
         {
-            Log.Write("автозапуск: " + e.Message);
+            Log.Write(Text.AutostartFailed(e.Message));
             ShowAutostart(_autostart);
-            MessageBox.Show("Не удалось изменить автозапуск:\n" + e.Message, "Подсветка клавиатуры",
+            MessageBox.Show(Text.AutostartError(e.Message), Text.AppTitle,
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }

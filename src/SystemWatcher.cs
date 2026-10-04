@@ -31,7 +31,7 @@ sealed class SystemWatcher : NativeWindow, IDisposable
             Marshal.StructureToPtr(filter, buffer, false);
             _notification = RegisterDeviceNotification(Handle, buffer, 0 /* DEVICE_NOTIFY_WINDOW_HANDLE */);
             if (_notification == 0)
-                Log.Write($"RegisterDeviceNotification не сработал: {Marshal.GetLastPInvokeError()}");
+                Log.Write(Text.NotificationFailed(Marshal.GetLastPInvokeError()));
         }
         finally
         {

@@ -18,19 +18,9 @@ enum EffectOptions
 
 sealed record Effect(int Id, string Name, EffectOptions Options)
 {
-    // Names by effect code, as sbarda shows them (languageC3.lan, docs/PROTOCOL.md §5). Which effects a
-    // keyboard has and their options come from its model file (KeyboardModels); a model file may name codes
-    // missing here.
-    static readonly Dictionary<int, string> KnownNames = new()
-    {
-        [1] = "Спектр", [2] = "Ступени", [3] = "Статичный цвет", [4] = "Дыхание", [5] = "Цветение",
-        [6] = "Волна", [7] = "Волна вверх-вниз", [8] = "Фонтан", [9] = "Млечный путь", [10] = "Вращение",
-        [11] = "Прилив", [12] = "Морская волна", [13] = "Рябь от нажатий", [14] = "Рябь на подсветке",
-        [15] = "Одна клавиша", [16] = "Сетка", [17] = "Пианино", [18] = "Перелив", [19] = "Дождь",
-        [20] = "Звёздный свет", [21] = "Фейерверк", [22] = "Волновая полоса",
-    };
-
-    public static string KnownName(int id) => KnownNames.TryGetValue(id, out string? name) ? name : $"эффект {id}";
+    // Names by effect code are in Text.EffectName. Which effects a keyboard has and their options come from
+    // its model file (KeyboardModels); a model file may name codes missing there.
+    public static string KnownName(int id) => Text.EffectName(id);
 
     public override string ToString() => Name;
 }
@@ -64,7 +54,7 @@ sealed class LightSettings
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
-            if (Exists) Log.Write($"settings.json не прочитан ({e.Message}), беру значения по умолчанию");
+            if (Exists) Log.Write(Text.SettingsNotRead(e.Message));
             return new();
         }
     }
@@ -108,6 +98,6 @@ sealed class LightSettings
     public string Describe(KeyboardModel? model = null)
     {
         string name = (model ?? KeyboardModels.Find(Model))?.FindEffect(Effect)?.Name ?? KbLight.Effect.KnownName(Effect);
-        return $"{name}, яркость {Brightness}%";
+        return Text.Describe(name, Brightness);
     }
 }

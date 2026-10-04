@@ -18,6 +18,8 @@ sealed class TrayApp : ApplicationContext
     readonly RegisteredWaitHandle _showWait;
     SettingsForm? _form;
     bool _autostart;
+    // No settings.json yet: requests read the keyboard's lighting instead of writing ours over it.
+    bool _firstRun;
     string _status = "применяю…";
 
     // Applies run one at a time on a pool thread; a request queued meanwhile replaces older queued ones.
@@ -25,12 +27,12 @@ sealed class TrayApp : ApplicationContext
     readonly ManualResetEventSlim _idle = new(true);
     ApplyRequest? _pending;
 
-    sealed record ApplyRequest(LightSettings Settings, bool Force, string Reason, int Attempts);
+    sealed record ApplyRequest(LightSettings Settings, bool Force, string Reason, int Attempts, bool Adopt);
 
     public TrayApp(bool showSettings)
     {
+        _firstRun = !LightSettings.Exists;
         _settings = LightSettings.Load();
-        if (!LightSettings.Exists) _settings.Save();
 
         _autostartItem = new ToolStripMenuItem("Запускать при входе в Windows", null, (_, _) => SetAutostart(!_autostart));
         var menu = new ContextMenuStrip();
@@ -99,6 +101,7 @@ sealed class TrayApp : ApplicationContext
     {
         if (!_editDelay.Enabled) return;
         _editDelay.Stop();
+        _firstRun = false;
         SaveSettings();
         RequestApply(force: true, "изменены настройки");
     }
@@ -114,10 +117,11 @@ sealed class TrayApp : ApplicationContext
 
     void RequestApply(bool force, string reason, int attempts = 1)
     {
-        var request = new ApplyRequest(_settings.Clone(), force, reason, attempts);
+        var request = new ApplyRequest(_settings.Clone(), force, reason, attempts, _firstRun);
         lock (_gate)
         {
             bool busy = _pending is not null || !_idle.IsSet;
+            // Adopt comes from the newer request: an edit cancels a pending first-run read.
             _pending = _pending is null ? request
                 : request with { Force = force || _pending.Force, Attempts = Math.Max(attempts, _pending.Attempts) };
             if (busy) return;
@@ -152,7 +156,7 @@ sealed class TrayApp : ApplicationContext
         byte[]? fallback = request.Settings.GetLastGoodBlock();
         for (int attempt = 1; ; attempt++)
         {
-            var result = Keyboard.Apply(want, request.Force, fallback);
+            var result = request.Adopt ? Keyboard.Read() : Keyboard.Apply(want, request.Force, fallback);
             Log.Write($"{request.Reason}: {result.Status} — {result.Message}");
             bool retry = (result.Status is ApplyStatus.Failed or ApplyStatus.NotFound) && attempt < request.Attempts;
             if (!retry) return result;
@@ -166,18 +170,30 @@ sealed class TrayApp : ApplicationContext
 
     void OnApplied(ApplyRequest request, ApplyResult result)
     {
+        bool adopted = request.Adopt && _firstRun && result is { Status: ApplyStatus.AlreadySet, Block: not null };
+        if (adopted)
+        {
+            _firstRun = false;
+            _settings.SetFromBlock(result.Block);
+            _form?.Reload();
+        }
+        if (request.Adopt && !adopted && result.Status == ApplyStatus.AlreadySet)
+            return; // the user edited meanwhile; the edit's own write reports the status
+
         _status = result.Status switch
         {
-            ApplyStatus.Written or ApplyStatus.AlreadySet => $"{request.Settings.Describe()} — применено в {DateTime.Now:HH:mm}",
+            ApplyStatus.Written or ApplyStatus.AlreadySet =>
+                $"{(adopted ? _settings : request.Settings).Describe()} — применено в {DateTime.Now:HH:mm}",
             ApplyStatus.NotFound => "Клавиатура не найдена. Подсветка применится, когда она подключится.",
             _ => "Не удалось применить: " + result.Message,
         };
         UpdateTooltip();
         _form?.SetStatus(_status);
 
-        if (result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
+        if (_firstRun) return; // nothing chosen yet, so no settings.json to keep the block in
+        if (adopted || result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
         {
-            _settings.LastGoodBlock = Convert.ToHexString(block);
+            if (result.Block is not null) _settings.LastGoodBlock = Convert.ToHexString(result.Block);
             SaveSettings();
         }
     }

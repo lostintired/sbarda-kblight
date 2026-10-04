@@ -100,6 +100,18 @@ sealed class LightSettings
 
     public void SetColor(Color c) => Rgb = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
+    /// <summary>Takes the lighting from a settings block read from the keyboard (bytes 8..16).</summary>
+    public void SetFromBlock(ReadOnlySpan<byte> block)
+    {
+        Effect = block[8];
+        Brightness = Math.Min((int)block[9], 100);
+        Speed = Math.Clamp(4 - block[10], 0, 4);
+        ReverseDirection = block[11] != 0;
+        Multicolor = block[12] != 0;
+        ColorIndex = block[13];
+        Rgb = $"#{block[14]:X2}{block[15]:X2}{block[16]:X2}";
+    }
+
     public byte[]? GetLastGoodBlock()
     {
         try { return LastGoodBlock is null ? null : Convert.FromHexString(LastGoodBlock); }

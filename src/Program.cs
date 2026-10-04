@@ -9,6 +9,7 @@ static class Program
     // KbLight.exe --tray      tray icon only; used by autostart
     // KbLight.exe --apply     write the saved lighting once and exit
     // KbLight.exe --check     write it only if the keyboard has something else, then exit
+    //                         (both exit with 3 and leave the keyboard alone if there is no settings.json yet)
     // KbLight.exe --autostart on|off
     [STAThread]
     static int Main(string[] args)
@@ -44,9 +45,15 @@ static class Program
 
     static int ApplyOnce(bool force)
     {
+        string mode = force ? "--apply" : "--check";
+        if (!LightSettings.Exists)
+        {
+            Log.Write($"{mode}: NoSettings — нет settings.json, подсветку ещё не выбирали");
+            return 3;
+        }
         var settings = LightSettings.Load();
         var result = Keyboard.Apply(LightState.From(settings), force, settings.GetLastGoodBlock());
-        Log.Write($"{(force ? "--apply" : "--check")}: {result.Status} — {result.Message}");
+        Log.Write($"{mode}: {result.Status} — {result.Message}");
         return result.Status switch
         {
             ApplyStatus.Written or ApplyStatus.AlreadySet => 0,

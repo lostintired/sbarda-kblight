@@ -66,6 +66,24 @@ static class Keyboard
     /// <param name="fallbackBlock">base block for the write if the keyboard returns a damaged one</param>
     public static ApplyResult Apply(LightState want, bool force, byte[]? fallbackBlock)
     {
+        var results = ForEachInterface(path => ApplyTo(path, want, force, fallbackBlock));
+        if (results.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
+        return results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
+            ?? results.FirstOrDefault(r => r.Status == ApplyStatus.Written)
+            ?? results[0];
+    }
+
+    /// <summary>Reads the lighting the keyboard holds now, without writing anything.</summary>
+    /// <returns>AlreadySet with the block of the first interface that returned a valid one</returns>
+    public static ApplyResult Read()
+    {
+        var results = ForEachInterface(ReadFrom);
+        if (results.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
+        return results.FirstOrDefault(r => r.Status == ApplyStatus.AlreadySet) ?? results[0];
+    }
+
+    static List<ApplyResult> ForEachInterface(Func<string, ApplyResult> action)
+    {
         // Serializes with other KbLight processes (e.g. a one-shot --apply next to the tray instance).
         using var deviceLock = new Mutex(false, @"Local\KbLight.Device");
         bool locked;
@@ -73,25 +91,36 @@ static class Keyboard
         catch (AbandonedMutexException) { locked = true; }
         try
         {
-            var paths = Native.HidInterfaces().Where(IsLightingInterface).ToList();
             var results = new List<ApplyResult>();
-            foreach (string path in paths)
+            foreach (string path in Native.HidInterfaces().Where(IsLightingInterface))
             {
-                try { results.Add(ApplyTo(path, want, force, fallbackBlock)); }
+                try { results.Add(action(path)); }
                 catch (Exception e) when (e is IOException or TimeoutException or Win32Exception)
                 {
                     results.Add(new(ApplyStatus.Failed, e.Message));
                 }
             }
-            if (results.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
-            return results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
-                ?? results.FirstOrDefault(r => r.Status == ApplyStatus.Written)
-                ?? results[0];
+            return results;
         }
         finally
         {
             if (locked) deviceLock.ReleaseMutex();
         }
+    }
+
+    static ApplyResult ReadFrom(string path)
+    {
+        using var device = HidDevice.Open(path);
+        if (device is null) return new(ApplyStatus.Failed, "не удалось открыть интерфейс клавиатуры");
+
+        byte[]? block;
+        device.Command(CmdOpen);
+        try { block = ReadBlock(device); }
+        finally { CloseSession(device); }
+
+        return block is null
+            ? new(ApplyStatus.Failed, "клавиатура вернула неожиданный блок настроек, настройки не взяты")
+            : new(ApplyStatus.AlreadySet, "первый запуск, взял из клавиатуры: " + LightState.Describe(block), block);
     }
 
     static ApplyResult ApplyTo(string path, LightState want, bool force, byte[]? fallbackBlock)

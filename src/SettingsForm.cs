@@ -107,6 +107,9 @@ sealed class SettingsForm : Form
         if (extra is not null) grid.Controls.Add(extra, 2, row);
     }
 
+    /// <summary>Shows settings that changed outside the window (taken from the keyboard on first run).</summary>
+    public void Reload() => LoadValues(_autostart.Checked);
+
     void LoadValues(bool autostart)
     {
         _loading = true;

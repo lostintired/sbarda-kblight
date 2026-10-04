@@ -1,0 +1,17 @@
+# Сборка
+src/bin/
+src/obj/
+publish/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Логи перехвата обмена с клавиатурой (tools/capture): большие и разовые
+tools/capture/*.jsonl
+
+# IDE и личные настройки Claude Code
+.vs/
+.idea/
+*.user
+.claude/settings.local.json

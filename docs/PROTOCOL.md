@@ -22,7 +22,7 @@
 | `MI_02` `COL04` | `0x01 / 0x80` System Control | 3 / — | питание и сон |
 | `MI_02` `COL05` | `0x01 / 0x0C` Wireless Radio Controls | 2 / — | — |
 
-KbLight и sbarda.exe работают с `MI_01` (путь вида `\\?\hid#vid_19f5&pid_fb2a&mi_01#…`). sbarda.exe знает и другие PID этого производителя — `FB29`, `FCE0`, `FE20`, `FE50`, `FF0C`, `FF1D` (строки в exe и `config.xml`). KbLight PID не проверяет, но всё ниже подтверждено только на `FB2A`.
+KbLight и sbarda.exe работают с `MI_01` (путь вида `\\?\hid#vid_19f5&pid_fb2a&mi_01#…`). `FB2A` — ZORNER ZH99 HE (Hall Effect), по коробке у пользователя ✔. sbarda.exe знает и другие PID этого производителя — `FB29`, `FCE0`, `FE20`, `FE50`, `FF0C`, `FF1D` (строки в exe и `config.xml`); какие это модели — ?. KbLight пишет только в модели, для которых есть файл модели (`docs/ADDING-A-KEYBOARD.md`); всё ниже подтверждено только на `FB2A`.
 
 ## 2. Отчёт
 

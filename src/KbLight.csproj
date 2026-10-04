@@ -21,4 +21,9 @@
     <EmbeddedResource Include="app.ico" LogicalName="KbLight.app.ico" />
   </ItemGroup>
 
+  <!-- -p:NoBuiltinModels=true builds a test exe that knows no keyboard (manual check of Unsupported). -->
+  <ItemGroup Condition="'$(NoBuiltinModels)' != 'true'">
+    <EmbeddedResource Include="models\*.json" LogicalName="KbLight.models.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

@@ -9,7 +9,8 @@ static class Program
     // KbLight.exe --tray      tray icon only; used by autostart
     // KbLight.exe --apply     write the saved lighting once and exit
     // KbLight.exe --check     write it only if the keyboard has something else, then exit
-    //                         (both exit with 3 and leave the keyboard alone if there is no settings.json yet)
+    //                         (both exit with 3 and leave the keyboard alone if there is no settings.json yet,
+    //                         and with 4 if the only keyboards found have no model file)
     // KbLight.exe --autostart on|off
     [STAThread]
     static int Main(string[] args)
@@ -58,6 +59,7 @@ static class Program
         {
             ApplyStatus.Written or ApplyStatus.AlreadySet => 0,
             ApplyStatus.NotFound => 1,
+            ApplyStatus.Unsupported => 4,
             _ => 2,
         };
     }

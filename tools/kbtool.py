@@ -5,7 +5,7 @@ Protocol notes: docs/PROTOCOL.md. Close sbarda.exe first and do not run this whi
 is writing: kbtool does not take KbLight's device mutex. After experiments restore the
 user's lighting with `KbLight.exe --apply`.
 
-usage:
+usage (--pid XXXX before the command picks one keyboard model, e.g. --pid FB2A):
   python kbtool.py list            # VID 19F5 HID interfaces with usage and report sizes
   python kbtool.py info            # cmd 03: firmware version bytes and build date
   python kbtool.py read            # cmd 05: the 32-byte settings block, lighting bytes decoded
@@ -94,11 +94,28 @@ def caps_of(h):
     return c
 
 
+def settings_interfaces(pid=None):
+    """VID 19F5 interfaces with 65-byte input and output reports: the settings channel (MI_01 on ZH99 HE)."""
+    out = []
+    for p in hid_paths():
+        low = p.lower()
+        if "vid_19f5" not in low or (pid and f"pid_{pid.lower()}" not in low):
+            continue
+        h = k32.CreateFileW(p, 0, SHARE_RW, None, OPEN_EXISTING, 0, None)
+        if h in (INVALID, None):
+            continue
+        c = caps_of(h)
+        k32.CloseHandle(h)
+        if c and c.InputReportByteLength == 65 and c.OutputReportByteLength == 65:
+            out.append(p)
+    return out
+
+
 class Keyboard:
-    def __init__(self):
-        cands = [p for p in hid_paths() if "vid_19f5" in p.lower() and "mi_01" in p.lower()]
+    def __init__(self, pid=None):
+        cands = settings_interfaces(pid)
         if not cands:
-            raise SystemExit("keyboard vendor interface not found")
+            raise SystemExit("keyboard vendor interface not found" + (f" for PID {pid}" if pid else ""))
         self.path = cands[0]
         self.h = k32.CreateFileW(self.path, GENERIC_RW, SHARE_RW, None, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, None)
         if self.h == INVALID or self.h is None:
@@ -152,16 +169,19 @@ class Keyboard:
 
 def main():
     a = sys.argv[1:]
+    pid = None
+    if a[:1] == ["--pid"] and len(a) > 1:
+        pid, a = a[1], a[2:]
     if not a or a[0] == "list":
         for p in hid_paths():
-            if "vid_19f5" in p.lower():
+            if "vid_19f5" in p.lower() and (not pid or f"pid_{pid.lower()}" in p.lower()):
                 h = k32.CreateFileW(p, 0, SHARE_RW, None, OPEN_EXISTING, 0, None)
                 c = caps_of(h) if h not in (INVALID, None) else None
                 info = f"page={c.UsagePage:04x} usage={c.Usage:04x} in={c.InputReportByteLength} out={c.OutputReportByteLength} feat={c.FeatureReportByteLength}" if c else "?"
                 print(p, info)
                 if h not in (INVALID, None): k32.CloseHandle(h)
         return
-    kb = Keyboard()
+    kb = Keyboard(pid)
     try:
         if a[0] == "info":
             r = kb.xfer(0x03)

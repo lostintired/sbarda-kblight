@@ -43,7 +43,7 @@ sealed class SystemWatcher : NativeWindow, IDisposable
     {
         if (m.Msg == WmDeviceChange && m.WParam == DbtDeviceArrival && m.LParam != 0
             && Marshal.ReadInt32(m.LParam, 4) == DbtDevtypDeviceInterface
-            && Keyboard.IsLightingInterface(Marshal.PtrToStringUni(m.LParam + NameOffset) ?? ""))
+            && Keyboard.IsInteresting(Marshal.PtrToStringUni(m.LParam + NameOffset) ?? ""))
         {
             KeyboardArrived?.Invoke();
         }

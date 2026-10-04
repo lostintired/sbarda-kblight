@@ -18,36 +18,19 @@ enum EffectOptions
 
 sealed record Effect(int Id, string Name, EffectOptions Options)
 {
-    const EffectOptions Animated = EffectOptions.Brightness | EffectOptions.Speed;
-    const EffectOptions Colored = EffectOptions.Color | EffectOptions.Multicolor;
+    // Names by effect code, as sbarda shows them (languageC3.lan, docs/PROTOCOL.md §5). Which effects a
+    // keyboard has and their options come from its model file (KeyboardModels); a model file may name codes
+    // missing here.
+    static readonly Dictionary<int, string> KnownNames = new()
+    {
+        [1] = "Спектр", [2] = "Ступени", [3] = "Статичный цвет", [4] = "Дыхание", [5] = "Цветение",
+        [6] = "Волна", [7] = "Волна вверх-вниз", [8] = "Фонтан", [9] = "Млечный путь", [10] = "Вращение",
+        [11] = "Прилив", [12] = "Морская волна", [13] = "Рябь от нажатий", [14] = "Рябь на подсветке",
+        [15] = "Одна клавиша", [16] = "Сетка", [17] = "Пианино", [18] = "Перелив", [19] = "Дождь",
+        [20] = "Звёздный свет", [21] = "Фейерверк", [22] = "Волновая полоса",
+    };
 
-    // Ids and option masks mirror sbarda's own table (t_light_data.mode / config_func) for this keyboard.
-    // Music rhythm (128) and per-key custom light (0) need the vendor app running, so they are left out.
-    public static IReadOnlyList<Effect> All { get; } =
-    [
-        new(1, "Спектр", Animated),
-        new(2, "Ступени", EffectOptions.Brightness | Colored),
-        new(3, "Статичный цвет", EffectOptions.Brightness | Colored),
-        new(4, "Дыхание", Animated | Colored),
-        new(5, "Цветение", Animated),
-        new(6, "Волна", Animated | Colored | EffectOptions.DirectionHorizontal),
-        new(7, "Волна вверх-вниз", Animated | Colored | EffectOptions.DirectionVertical),
-        new(8, "Фонтан", Animated | Colored | EffectOptions.DirectionRadial),
-        new(9, "Млечный путь", Animated | Colored),
-        new(10, "Вращение", Animated | Colored | EffectOptions.DirectionRotation),
-        new(11, "Прилив", Animated | Colored),
-        new(12, "Морская волна", Animated | Colored),
-        new(13, "Рябь от нажатий", Animated | Colored),
-        new(14, "Рябь на подсветке", Animated | Colored),
-        new(15, "Одна клавиша", Animated | Colored),
-        new(16, "Сетка", Animated | Colored),
-        new(17, "Пианино", Animated | Colored),
-        new(18, "Перелив", Animated | Colored),
-        new(19, "Дождь", Animated | Colored),
-        new(22, "Волновая полоса", Animated | Colored),
-    ];
-
-    public static Effect? Find(int id) => All.FirstOrDefault(e => e.Id == id);
+    public static string KnownName(int id) => KnownNames.TryGetValue(id, out string? name) ? name : $"эффект {id}";
 
     public override string ToString() => Name;
 }
@@ -65,6 +48,9 @@ sealed class LightSettings
     // Last valid settings block read from the keyboard (hex). Used as the base for a write
     // if the keyboard ever answers with a damaged block, so its other settings stay intact.
     public string? LastGoodBlock { get; set; }
+
+    // VID:PID of the keyboard last written to or read from; picks the effect list the window shows.
+    public string? Model { get; set; }
 
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -118,9 +104,10 @@ sealed class LightSettings
         catch (FormatException) { return null; }
     }
 
-    public string Describe()
+    /// <param name="model">the keyboard the lighting went to; by default the one in <see cref="Model"/></param>
+    public string Describe(KeyboardModel? model = null)
     {
-        string name = KbLight.Effect.Find(Effect)?.Name ?? $"эффект {Effect}";
+        string name = (model ?? KeyboardModels.Find(Model))?.FindEffect(Effect)?.Name ?? KbLight.Effect.KnownName(Effect);
         return $"{name}, яркость {Brightness}%";
     }
 }

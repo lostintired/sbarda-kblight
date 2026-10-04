@@ -1,0 +1,28 @@
+{
+  "name": "ZORNER ZH99 HE",
+  "vid": "19F5",
+  "pid": "FB2A",
+  "interface": 1,
+  "effects": [
+    { "id": 1, "options": ["brightness", "speed"] },
+    { "id": 2, "options": ["brightness", "color", "multicolor"] },
+    { "id": 3, "options": ["brightness", "color", "multicolor"] },
+    { "id": 4, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 5, "options": ["brightness", "speed"] },
+    { "id": 6, "options": ["brightness", "speed", "color", "multicolor", "direction-horizontal"] },
+    { "id": 7, "options": ["brightness", "speed", "color", "multicolor", "direction-vertical"] },
+    { "id": 8, "options": ["brightness", "speed", "color", "multicolor", "direction-radial"] },
+    { "id": 9, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 10, "options": ["brightness", "speed", "color", "multicolor", "direction-rotation"] },
+    { "id": 11, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 12, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 13, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 14, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 15, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 16, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 17, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 18, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 19, "options": ["brightness", "speed", "color", "multicolor"] },
+    { "id": 22, "options": ["brightness", "speed", "color", "multicolor"] }
+  ]
+}

@@ -175,6 +175,7 @@ sealed class TrayApp : ApplicationContext
         {
             _firstRun = false;
             _settings.SetFromBlock(result.Block);
+            _settings.Model = result.Model?.Id;
             _form?.Reload();
         }
         if (request.Adopt && !adopted && result.Status == ApplyStatus.AlreadySet)
@@ -183,15 +184,24 @@ sealed class TrayApp : ApplicationContext
         _status = result.Status switch
         {
             ApplyStatus.Written or ApplyStatus.AlreadySet =>
-                $"{(adopted ? _settings : request.Settings).Describe()} — применено в {DateTime.Now:HH:mm}",
+                $"{(adopted ? _settings : request.Settings).Describe(result.Model)} — применено в {DateTime.Now:HH:mm}",
             ApplyStatus.NotFound => "Клавиатура не найдена. Подсветка применится, когда она подключится.",
+            ApplyStatus.Unsupported => $"Клавиатура {result.UnknownId} не знакома программе. Нужен файл модели — ссылка «Модели» в окне.",
             _ => "Не удалось применить: " + result.Message,
         };
         UpdateTooltip();
         _form?.SetStatus(_status);
 
+        bool modelChanged = false;
+        if (result is { Status: ApplyStatus.Written or ApplyStatus.AlreadySet, Model: { } model } && model.Id != _settings.Model)
+        {
+            _settings.Model = model.Id;
+            modelChanged = true;
+            _form?.Reload();
+        }
+
         if (_firstRun) return; // nothing chosen yet, so no settings.json to keep the block in
-        if (adopted || result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
+        if (adopted || modelChanged || result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
         {
             if (result.Block is not null) _settings.LastGoodBlock = Convert.ToHexString(result.Block);
             SaveSettings();

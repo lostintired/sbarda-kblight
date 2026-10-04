@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using Microsoft.Win32.SafeHandles;
 
 namespace KbLight;
@@ -17,9 +18,12 @@ namespace KbLight;
 //   [11] direction, [12] multicolor, [13] color index, [14..16] R G B. The other bytes hold
 //   non-lighting settings (report rate, dead zones...) and go back unchanged, as sbarda.exe does.
 
-enum ApplyStatus { NotFound, AlreadySet, Written, Failed }
+enum ApplyStatus { NotFound, Unsupported, AlreadySet, Written, Failed }
 
-sealed record ApplyResult(ApplyStatus Status, string Message, byte[]? Block = null);
+/// <param name="Model">the keyboard model the result came from (null for NotFound and Unsupported)</param>
+/// <param name="UnknownId">VID:PID of the keyboard without a model file, for Unsupported</param>
+sealed record ApplyResult(ApplyStatus Status, string Message, byte[]? Block = null, KeyboardModel? Model = null,
+    string? UnknownId = null);
 
 readonly record struct LightState(
     byte Effect, byte Brightness, byte Speed, byte Direction, bool Multicolor, byte ColorIndex, Color Color)
@@ -58,31 +62,50 @@ static class Keyboard
     public const int BlockLength = 0x20;
     const byte CmdOpen = 0x01, CmdClose = 0x02, CmdRead = 0x05, CmdWrite = 0x06;
 
-    public static bool IsLightingInterface(string devicePath) =>
-        devicePath.Contains("vid_19f5", StringComparison.OrdinalIgnoreCase) &&
-        devicePath.Contains("&mi_01", StringComparison.OrdinalIgnoreCase);
+    const ushort SbardaVid = 0x19F5;
+    static readonly Regex PathIds = new(@"vid_([0-9a-f]{4})&pid_([0-9a-f]{4})(?:&mi_([0-9a-f]{2}))?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>A device arrival worth an apply: a known model's settings interface or any sbarda-vendor device.</summary>
+    public static bool IsInteresting(string devicePath)
+    {
+        var ids = ParsePath(devicePath);
+        return ids is { } p && (p.Vid == SbardaVid || ModelOf(p, KeyboardModels.Current()) is not null);
+    }
+
+    static (ushort Vid, ushort Pid, int? Interface)? ParsePath(string path)
+    {
+        var m = PathIds.Match(path);
+        if (!m.Success) return null;
+        return (Convert.ToUInt16(m.Groups[1].Value, 16), Convert.ToUInt16(m.Groups[2].Value, 16),
+            m.Groups[3].Success ? Convert.ToInt32(m.Groups[3].Value, 16) : null);
+    }
+
+    static KeyboardModel? ModelOf((ushort Vid, ushort Pid, int? Interface) ids, IReadOnlyList<KeyboardModel> models) =>
+        models.FirstOrDefault(m => m.Vid == ids.Vid && m.Pid == ids.Pid && m.Interface == ids.Interface);
 
     /// <param name="force">write even if the keyboard already reports the wanted lighting</param>
     /// <param name="fallbackBlock">base block for the write if the keyboard returns a damaged one</param>
     public static ApplyResult Apply(LightState want, bool force, byte[]? fallbackBlock)
     {
-        var results = ForEachInterface(path => ApplyTo(path, want, force, fallbackBlock));
-        if (results.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
-        return results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
+        return ForEachInterface(path => ApplyTo(path, want, force, fallbackBlock), results =>
+            results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
             ?? results.FirstOrDefault(r => r.Status == ApplyStatus.Written)
-            ?? results[0];
+            ?? results[0]);
     }
 
     /// <summary>Reads the lighting the keyboard holds now, without writing anything.</summary>
     /// <returns>AlreadySet with the block of the first interface that returned a valid one</returns>
     public static ApplyResult Read()
     {
-        var results = ForEachInterface(ReadFrom);
-        if (results.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
-        return results.FirstOrDefault(r => r.Status == ApplyStatus.AlreadySet) ?? results[0];
+        return ForEachInterface(ReadFrom, results => results.FirstOrDefault(r => r.Status == ApplyStatus.AlreadySet) ?? results[0]);
     }
 
-    static List<ApplyResult> ForEachInterface(Func<string, ApplyResult> action)
+    /// <summary>
+    /// Runs the action on the settings interface of every connected keyboard that has a model file.
+    /// Sbarda-vendor keyboards without one are never opened.
+    /// </summary>
+    static ApplyResult ForEachInterface(Func<string, ApplyResult> action, Func<List<ApplyResult>, ApplyResult> combine)
     {
         // Serializes with other KbLight processes (e.g. a one-shot --apply next to the tray instance).
         using var deviceLock = new Mutex(false, @"Local\KbLight.Device");
@@ -91,16 +114,32 @@ static class Keyboard
         catch (AbandonedMutexException) { locked = true; }
         try
         {
+            var models = KeyboardModels.Current();
             var results = new List<ApplyResult>();
-            foreach (string path in Native.HidInterfaces().Where(IsLightingInterface))
+            var unknown = new SortedSet<ushort>();
+            foreach (string path in Native.HidInterfaces())
             {
-                try { results.Add(action(path)); }
+                if (ParsePath(path) is not { } ids) continue;
+                if (ModelOf(ids, models) is not { } model)
+                {
+                    if (ids.Vid == SbardaVid && !models.Any(m => m.Vid == ids.Vid && m.Pid == ids.Pid)) unknown.Add(ids.Pid);
+                    continue;
+                }
+                try { results.Add(action(path) with { Model = model }); }
                 catch (Exception e) when (e is IOException or TimeoutException or Win32Exception)
                 {
-                    results.Add(new(ApplyStatus.Failed, e.Message));
+                    results.Add(new(ApplyStatus.Failed, e.Message, Model: model));
                 }
             }
-            return results;
+            if (results.Count == 0)
+            {
+                if (unknown.Count == 0) return new(ApplyStatus.NotFound, "клавиатура не найдена");
+                string id = KeyboardModel.FormatId(SbardaVid, unknown.Min);
+                return new(ApplyStatus.Unsupported, $"клавиатура {id} не знакома программе, нужен файл модели", UnknownId: id);
+            }
+            foreach (ushort pid in unknown)
+                Log.Write($"клавиатура {KeyboardModel.FormatId(SbardaVid, pid)} не знакома программе, пропускаю");
+            return combine(results);
         }
         finally
         {

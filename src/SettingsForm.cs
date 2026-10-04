@@ -6,6 +6,7 @@ namespace KbLight;
 sealed class SettingsForm : Form
 {
     readonly LightSettings _settings;
+    readonly Label _model = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 8) };
     readonly ComboBox _effect = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
     readonly TrackBar _brightness = new()
     {
@@ -46,21 +47,24 @@ sealed class SettingsForm : Form
         var close = new Button { Text = "Закрыть", AutoSize = true, Anchor = AnchorStyles.Right };
         close.Click += (_, _) => Close();
         CancelButton = close;
-        var log = new LinkLabel { Text = "Журнал", AutoSize = true, Anchor = AnchorStyles.Left };
-        if (Application.IsDarkModeEnabled)
-            log.LinkColor = log.ActiveLinkColor = log.VisitedLinkColor = Color.FromArgb(0x60, 0xCD, 0xFF);
-        log.LinkClicked += (_, _) => OpenLog();
+        var log = NewLink("Журнал", OpenLog);
+        var models = NewLink("Модели", OpenModels);
+        var links = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
+        links.Controls.AddRange([log, models]);
 
         var colorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         colorRow.Controls.AddRange([_color, _multicolor]);
         var bottom = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bottom.Controls.Add(log, 0, 0);
+        bottom.Controls.Add(links, 0, 0);
         bottom.Controls.Add(close, 1, 0);
 
         var grid = new TableLayoutPanel { AutoSize = true, ColumnCount = 3 };
         for (int i = 0; i < 3; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.Controls.Add(_model, 0, grid.RowCount);
+        grid.SetColumnSpan(_model, 3);
+        grid.RowCount++;
         AddRow(grid, "Эффект", _effect, span: 2);
         AddRow(grid, "Яркость", _brightness, _brightnessValue);
         AddRow(grid, "Скорость", _speed, _speedValue);
@@ -76,7 +80,7 @@ sealed class SettingsForm : Form
         Controls.Add(grid);
         ResumeLayout();
 
-        foreach (var effect in Effect.All) _effect.Items.Add(effect);
+        FillEffects();
         LoadValues(autostart);
 
         _effect.SelectedIndexChanged += (_, _) => Edit(() => _settings.Effect = ((Effect)_effect.SelectedItem!).Id);
@@ -107,13 +111,31 @@ sealed class SettingsForm : Form
         if (extra is not null) grid.Controls.Add(extra, 2, row);
     }
 
-    /// <summary>Shows settings that changed outside the window (taken from the keyboard on first run).</summary>
-    public void Reload() => LoadValues(_autostart.Checked);
+    /// <summary>
+    /// Shows settings that changed outside the window: lighting taken from the keyboard on first run,
+    /// or another keyboard model with its own effect list.
+    /// </summary>
+    public void Reload()
+    {
+        _loading = true;
+        FillEffects();
+        LoadValues(_autostart.Checked);
+    }
+
+    void FillEffects()
+    {
+        var model = KeyboardModels.Find(_settings.Model);
+        _model.Text = "Клавиатура: " + (model?.Name ?? "не определена");
+        _effect.Items.Clear();
+        foreach (var effect in (model ?? KeyboardModels.Default)?.Effects ?? []) _effect.Items.Add(effect);
+    }
+
+    Effect? CurrentEffect() => _effect.Items.Cast<Effect>().FirstOrDefault(e => e.Id == _settings.Effect);
 
     void LoadValues(bool autostart)
     {
         _loading = true;
-        _effect.SelectedItem = Effect.Find(_settings.Effect);
+        _effect.SelectedItem = CurrentEffect();
         _brightness.Value = Math.Clamp(_settings.Brightness, 0, 100);
         _speed.Value = Math.Clamp(_settings.Speed, 0, 4);
         _multicolor.Checked = _settings.Multicolor;
@@ -133,7 +155,7 @@ sealed class SettingsForm : Form
 
     void UpdateControls()
     {
-        var options = Effect.Find(_settings.Effect)?.Options ?? 0;
+        var options = CurrentEffect()?.Options ?? 0;
         _brightness.Enabled = options.HasFlag(EffectOptions.Brightness);
         _speed.Enabled = options.HasFlag(EffectOptions.Speed);
         _multicolor.Enabled = options.HasFlag(EffectOptions.Multicolor);
@@ -152,6 +174,21 @@ sealed class SettingsForm : Form
         using var dialog = new ColorDialog { Color = _settings.GetColor(), FullOpen = true };
         if (dialog.ShowDialog(this) == DialogResult.OK)
             Edit(() => _settings.SetColor(dialog.Color));
+    }
+
+    static LinkLabel NewLink(string text, Action open)
+    {
+        var link = new LinkLabel { Text = text, AutoSize = true, Margin = new Padding(3, 3, 12, 3) };
+        if (Application.IsDarkModeEnabled)
+            link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = Color.FromArgb(0x60, 0xCD, 0xFF);
+        link.LinkClicked += (_, _) => open();
+        return link;
+    }
+
+    static void OpenModels()
+    {
+        Directory.CreateDirectory(KeyboardModels.Folder);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{KeyboardModels.Folder}\"") { UseShellExecute = true });
     }
 
     static void OpenLog()

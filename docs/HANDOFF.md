@@ -23,9 +23,9 @@
 
 ## Ответы пользователя, 2026-10-04
 
-1. Аккаунт `DINKLEBERG38`, репозиторий `sbarda-kblight`, ветка `main` — да.
-2. Почта — пользователю объяснён noreply-адрес `36529419+DINKLEBERG38@users.noreply.github.com`, ждём «ок» или «оставь основную».
-3. MIT — да; кого вписать в Copyright — не названо, по умолчанию `DINKLEBERG38`.
+1. Аккаунт `lostintired` (до 2026-10-04 — `DINKLEBERG38`, id 36529419), репозиторий `sbarda-kblight`, ветка `main` — да.
+2. Почта — noreply `36529419+lostintired@users.noreply.github.com`: задана в `.git/config`, автор всех коммитов переписан.
+3. MIT — да; кого вписать в Copyright — не названо, по умолчанию `lostintired`.
 4. Английский интерфейс — **до релиза**; README по-английски + `README.ru.md`; журнал — на языке интерфейса (по языку Windows).
 5. Модель — **ZORNER ZH99 HE** (Hall Effect), USB `19F5:FB2A`. Нужна инструкция, как добавить свою модель.
 6. Другие модели — **файлы моделей**: JSON (название, VID/PID, интерфейс, эффекты); ZH99 HE встроен как проверенный; свой файл — в `%LOCALAPPDATA%\KbLight\devices\`; без файла неизвестная модель не трогается; `docs/ADDING-A-KEYBOARD.md` — как проверить через `kbtool.py`, написать файл и прислать PR/issue.

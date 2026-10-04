@@ -22,11 +22,16 @@ sealed class SettingsForm : Form
     readonly CheckBox _multicolor = new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
     readonly CheckBox _reverse = new() { Text = KbLight.Text.ReverseDirection, AutoSize = true };
     readonly CheckBox _autostart = new() { Text = KbLight.Text.StartWithWindows, AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
+    readonly CheckBox _checkUpdates = new() { Text = KbLight.Text.CheckUpdates, AutoSize = true };
+    readonly Label _version = new() { Text = AppVersion.Text, AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 3, 0, 3) };
+    readonly LinkLabel _updateLink = new() { AutoSize = true, Visible = false, Margin = new Padding(0, 3, 3, 3) };
+    ReleaseInfo? _update;
     readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(380, 0), Margin = new Padding(3, 8, 3, 3) };
     bool _loading;
 
     public event Action? SettingsChanged;
     public event Action<bool>? AutostartToggled;
+    public event Action<bool>? UpdatesToggled;
 
     public SettingsForm(LightSettings settings, bool autostart)
     {
@@ -71,8 +76,14 @@ sealed class SettingsForm : Form
         AddRow(grid, KbLight.Text.ColorCaption, colorRow, span: 2);
         AddRow(grid, "", _reverse, span: 2);
         AddRow(grid, "", _autostart, span: 2);
+        AddRow(grid, "", _checkUpdates, span: 2);
         grid.Controls.Add(_status, 0, grid.RowCount);
         grid.SetColumnSpan(_status, 3);
+        grid.RowCount++;
+        var versionRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        versionRow.Controls.AddRange([_version, _updateLink]);
+        grid.Controls.Add(versionRow, 0, grid.RowCount);
+        grid.SetColumnSpan(versionRow, 3);
         grid.RowCount++;
         grid.Controls.Add(bottom, 0, grid.RowCount);
         grid.SetColumnSpan(bottom, 3);
@@ -90,9 +101,22 @@ sealed class SettingsForm : Form
         _reverse.CheckedChanged += (_, _) => Edit(() => _settings.ReverseDirection = _reverse.Checked);
         _color.Click += (_, _) => PickColor();
         _autostart.CheckedChanged += (_, _) => { if (!_loading) AutostartToggled?.Invoke(_autostart.Checked); };
+        _checkUpdates.CheckedChanged += (_, _) => { if (!_loading) UpdatesToggled?.Invoke(_checkUpdates.Checked); };
+        _updateLink.LinkClicked += (_, _) => { if (_update is not null) UpdateCheck.Open(_update); };
+        if (Application.IsDarkModeEnabled)
+            _updateLink.LinkColor = _updateLink.ActiveLinkColor = _updateLink.VisitedLinkColor = Color.FromArgb(0x60, 0xCD, 0xFF);
     }
 
     public void SetStatus(string text) => _status.Text = text;
+
+    /// <summary>Shows "version N is available" after the version line, or hides it.</summary>
+    public void SetUpdate(ReleaseInfo? release)
+    {
+        _update = release;
+        _version.Text = release is null ? AppVersion.Text : AppVersion.Text + " ·";
+        _updateLink.Text = release is null ? "" : KbLight.Text.UpdateLink(release.Version);
+        _updateLink.Visible = release is not null;
+    }
 
     public void SetAutostart(bool enabled)
     {
@@ -141,6 +165,7 @@ sealed class SettingsForm : Form
         _multicolor.Checked = _settings.Multicolor;
         _reverse.Checked = _settings.ReverseDirection;
         _autostart.Checked = autostart;
+        _checkUpdates.Checked = _settings.CheckUpdates;
         _loading = false;
         UpdateControls();
     }

@@ -27,6 +27,8 @@ KbLight writes your lighting to the keyboard when you sign in to Windows, when t
 
 On the first start KbLight writes nothing: it reads the lighting the keyboard has now and keeps it as yours. Pick an effect in the window, and from then on KbLight keeps that one. Right after a power cycle the keyboard shows its own default, so if KbLight's first start comes after a reboot, that default is what it takes — just choose your effect again.
 
+KbLight checks GitHub for a newer release once a day — see [Updates](#updates).
+
 The window, menu and log are in English, or in Russian if Windows is in Russian. To choose by hand, set the environment variable `KBLIGHT_LANG=en` or `ru` and restart KbLight.
 
 ## Remove the broken sbarda autostart entry
@@ -39,6 +41,14 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupAppro
 ```
 
 You do not need sbarda running for the lighting. If you open it for other settings, do not change the lighting there — KbLight puts its own back at the next sign-in. Do not enable sbarda's autostart.
+
+## Updates
+
+The window shows the version ("KbLight 1.1.0"); `KbLight.exe --version | Write-Output` prints it in PowerShell.
+
+While the tray is running, KbLight asks GitHub for the latest release a minute after it starts and then once a day. If there is a newer one, the window shows a "version N is available" link and Windows shows a notification once; both open the release page. Nothing is downloaded or installed automatically: to update, exit KbLight, replace `KbLight.exe` with the new one and start it.
+
+What goes over the network: one HTTPS request to `api.github.com/repos/lostintired/sbarda-kblight/releases/latest` with the header `User-Agent: KbLight/<version>` — nothing about you, your PC or your keyboard. To turn it off, untick **Check for updates** in the window (`"CheckUpdates": false` in `settings.json`). `--apply`, `--check`, `--autostart` and `--version` never go online.
 
 ## Where things are
 
@@ -55,7 +65,8 @@ You do not need sbarda running for the lighting. If you open it for other settin
 - `--tray` — tray icon only, this is how autostart runs it;
 - `--apply` — write the saved lighting and exit;
 - `--check` — write it only if the keyboard has something else, then exit;
-- `--autostart on|off` — turn autostart on or off.
+- `--autostart on|off` — turn autostart on or off;
+- `--version` — print `KbLight <version>` and exit (KbLight is a windowed app, so in PowerShell pipe it: `KbLight.exe --version | Write-Output`).
 
 Exit codes of `--apply` and `--check`: 0 — the lighting is set, 1 — keyboard not found, 2 — write failed, 3 — no `settings.json` yet (keyboard untouched), 4 — only keyboards without a model file were found.
 
@@ -81,7 +92,8 @@ The project documents are in Russian:
 - `openspec/specs/` — what the program must do, one file per capability;
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — the keyboard's HID protocol, each finding marked as tested, derived or unknown;
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ADR.md](docs/ADR.md), [docs/CHANGELOG.md](docs/CHANGELOG.md);
-- `tools/kbtool.py` — read and write the keyboard's settings block directly (Python, standard library only).
+- `tools/kbtool.py` — read and write the keyboard's settings block directly (Python, standard library only);
+- a fork that publishes its own releases changes the repository constant in `src/UpdateCheck.cs`.
 
 Behaviour changes go through [OpenSpec](https://github.com/Fission-AI/OpenSpec): `/opsx:propose` → `/opsx:apply` → `/opsx:archive`. `CLAUDE.md` and `AGENTS.md` are the rules for coding agents.
 

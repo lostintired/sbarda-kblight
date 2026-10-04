@@ -12,6 +12,7 @@ static class Program
     //                         (both exit with 3 and leave the keyboard alone if there is no settings.json yet,
     //                         and with 4 if the only keyboards found have no model file)
     // KbLight.exe --autostart on|off
+    // KbLight.exe --version   print "KbLight <version>" to the calling console and exit
     [STAThread]
     static int Main(string[] args)
     {
@@ -21,6 +22,7 @@ static class Program
             case "--apply": return ApplyOnce(force: true);
             case "--check": return ApplyOnce(force: false);
             case "--autostart": return SetAutostart(args.ElementAtOrDefault(1));
+            case "--version": return PrintVersion();
         }
 
         using var instance = new Mutex(true, @"Local\KbLight.Instance", out bool first);
@@ -81,6 +83,24 @@ static class Program
         }
     }
 
+    // A WinExe has no console of its own: borrow the one it was started from, if any. Redirected output
+    // (a pipe or a file) works without it; with neither, the text goes nowhere.
+    static int PrintVersion()
+    {
+        // Attaching replaces a redirected handle with the console, so only attach when there is none.
+        nint handle = GetStdHandle(-11 /* STD_OUTPUT_HANDLE */);
+        if (handle == 0 || handle == -1) AttachConsole(-1 /* ATTACH_PARENT_PROCESS */);
+        using var stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+        stdout.WriteLine(AppVersion.Text);
+        return 0;
+    }
+
     [DllImport("user32.dll")]
     static extern bool AllowSetForegroundWindow(int processId);
+
+    [DllImport("kernel32.dll")]
+    static extern bool AttachConsole(int processId);
+
+    [DllImport("kernel32.dll")]
+    static extern nint GetStdHandle(int stdHandle);
 }

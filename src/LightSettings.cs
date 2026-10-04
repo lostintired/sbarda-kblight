@@ -42,6 +42,9 @@ sealed class LightSettings
     // VID:PID of the keyboard last written to or read from; picks the effect list the window shows.
     public string? Model { get; set; }
 
+    // Whether the tray asks GitHub for a newer release (spec update-check); missing in older files means yes.
+    public bool CheckUpdates { get; set; } = true;
+
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     public static bool Exists => File.Exists(AppFiles.Settings);

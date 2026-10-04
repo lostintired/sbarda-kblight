@@ -104,6 +104,14 @@ static class Text
     public static string EffectRepeated(int id) => T($"эффект {id} повторяется", $"effect {id} is repeated");
     public static string UnknownOption(string option) => T($"неизвестный параметр {option}", $"unknown option {option}");
 
+    // Version and update check
+    public static string CheckUpdates => T("Проверять обновления", "Check for updates");
+    public static string UpdateLink(Version v) => T($"доступна версия {v}", $"version {v} is available");
+    public static string UpdateTitle(Version v) => T($"Доступна версия KbLight {v}", $"KbLight {v} is available");
+    public static string UpdateBody => T("Нажмите, чтобы открыть страницу загрузки.", "Click to open the download page.");
+    public static string UpdateFound(Version v, string url) => T($"доступна версия {v}: {url}", $"version {v} is available: {url}");
+    public static string UpdateFailed(string reason) => T("проверка обновлений не удалась: ", "update check failed: ") + reason;
+
     // Effect names by code: Russian as in KbLight 1.0, English as sbarda shows them (language\1033.lan, docs/PROTOCOL.md §5).
     static readonly Dictionary<int, (string Ru, string En)> EffectNames = new()
     {

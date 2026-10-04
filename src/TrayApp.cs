@@ -5,6 +5,8 @@ namespace KbLight;
 sealed class TrayApp : ApplicationContext
 {
     public const string ShowSignalName = @"Local\KbLight.Show";
+    const int FirstUpdateCheckMs = 60_000;
+    const int UpdateCheckPeriodMs = 24 * 60 * 60 * 1000;
 
     readonly SynchronizationContext _ui = SynchronizationContext.Current!;
     readonly LightSettings _settings;
@@ -14,6 +16,7 @@ sealed class TrayApp : ApplicationContext
     readonly System.Windows.Forms.Timer _arrivalDelay = new() { Interval = 1500 };
     readonly System.Windows.Forms.Timer _resumeDelay = new() { Interval = 3000 };
     readonly System.Windows.Forms.Timer _editDelay = new() { Interval = 300 };
+    readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = FirstUpdateCheckMs };
     readonly EventWaitHandle _showSignal = new(false, EventResetMode.AutoReset, ShowSignalName);
     readonly RegisteredWaitHandle _showWait;
     SettingsForm? _form;
@@ -21,6 +24,11 @@ sealed class TrayApp : ApplicationContext
     // No settings.json yet: requests read the keyboard's lighting instead of writing ours over it.
     bool _firstRun;
     string _status = Text.Applying;
+
+    // Update check (spec update-check): runs on a pool thread, results come back through _ui.
+    ReleaseInfo? _update;
+    Version? _announced;
+    bool _checking, _updateErrorLogged;
 
     // Applies run one at a time on a pool thread; a request queued meanwhile replaces older queued ones.
     readonly object _gate = new();
@@ -52,6 +60,7 @@ sealed class TrayApp : ApplicationContext
             Visible = true,
         };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
+        _tray.BalloonTipClicked += (_, _) => { if (_update is not null) UpdateCheck.Open(_update); };
         UpdateTooltip();
 
         _watcher.KeyboardArrived += () => Restart(_arrivalDelay);
@@ -61,12 +70,19 @@ sealed class TrayApp : ApplicationContext
         _arrivalDelay.Tick += (_, _) => { _arrivalDelay.Stop(); RequestApply(force: true, Text.ReasonArrived, attempts: 3); };
         _resumeDelay.Tick += (_, _) => { _resumeDelay.Stop(); RequestApply(force: false, Text.ReasonResumed, attempts: 3); };
         _editDelay.Tick += (_, _) => FlushEdits();
+        _updateTimer.Tick += (_, _) =>
+        {
+            _updateTimer.Interval = UpdateCheckPeriodMs;
+            CheckForUpdates();
+        };
 
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal,
             (_, _) => _ui.Post(_ => ShowSettings(), null), null, Timeout.Infinite, executeOnlyOnce: false);
 
         Log.Write(Text.LogStart(Environment.ProcessPath) + (showSettings ? "" : " --tray"));
+        Log.Write(AppVersion.Text);
         RequestApply(force: true, Text.ReasonStartup, attempts: 6);
+        if (_settings.CheckUpdates) _updateTimer.Start();
         Task.Run(() =>
         {
             bool enabled = Autostart.IsEnabled();
@@ -81,6 +97,7 @@ sealed class TrayApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         FlushEdits();
+        _updateTimer.Stop();
         _form?.Close();
         _tray.Visible = false;
         _tray.Dispose();
@@ -221,12 +238,14 @@ sealed class TrayApp : ApplicationContext
             _form = new SettingsForm(_settings, _autostart);
             _form.SettingsChanged += () => Restart(_editDelay);
             _form.AutostartToggled += SetAutostart;
+            _form.UpdatesToggled += SetCheckUpdates;
             _form.FormClosed += (_, _) =>
             {
                 FlushEdits();
                 _form = null;
             };
             _form.SetStatus(_status);
+            _form.SetUpdate(_update);
         }
         _form.Show();
         if (_form.WindowState == FormWindowState.Minimized) _form.WindowState = FormWindowState.Normal;
@@ -249,6 +268,53 @@ sealed class TrayApp : ApplicationContext
             MessageBox.Show(Text.AutostartError(e.Message), Text.AppTitle,
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    void SetCheckUpdates(bool enable)
+    {
+        _settings.CheckUpdates = enable;
+        // On first run nothing is saved yet: the choice goes into settings.json together with the lighting.
+        if (!_firstRun) SaveSettings();
+        _updateTimer.Stop();
+        if (!enable) return;
+        _updateTimer.Interval = UpdateCheckPeriodMs;
+        _updateTimer.Start();
+        CheckForUpdates();
+    }
+
+    void CheckForUpdates()
+    {
+        if (_checking) return;
+        _checking = true;
+        Task.Run(async () =>
+        {
+            ReleaseInfo? release = null;
+            string? error = null;
+            try { release = await UpdateCheck.FindNewer(); }
+            catch (Exception e) { error = e.Message; }
+            _ui.Post(_ => OnUpdateChecked(release, error), null);
+        });
+    }
+
+    void OnUpdateChecked(ReleaseInfo? release, string? error)
+    {
+        _checking = false;
+        if (!_settings.CheckUpdates) return; // turned off while the request was running
+        if (error is not null)
+        {
+            if (!_updateErrorLogged) Log.Write(Text.UpdateFailed(error));
+            _updateErrorLogged = true;
+            return;
+        }
+        _updateErrorLogged = false;
+        if (release is null) return;
+
+        _update = release;
+        _form?.SetUpdate(release);
+        if (_announced == release.Version) return;
+        _announced = release.Version;
+        Log.Write(Text.UpdateFound(release.Version, release.Url));
+        _tray.ShowBalloonTip(10_000, Text.UpdateTitle(release.Version), Text.UpdateBody, ToolTipIcon.Info);
     }
 
     void ShowAutostart(bool enabled)

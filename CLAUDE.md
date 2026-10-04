@@ -36,6 +36,8 @@ dotnet publish src -c Release -o publish    # publish\KbLight.exe, один фа
 3. Подмена: `python tools/kbtool.py setmode 1` («Спектр»), затем `KbLight.exe --check` → код 0, в журнале `--check: Written — было: effect=1 …; стало: effect=13 …`.
 4. Трей: запустить exe — в журнале `запуск …` и `запуск программы: Written — …`; правка в окне — `изменены настройки: Written — …`, и `kbtool.py read` показывает новое значение.
 
+5. Проверка обновлений: `dotnet publish src -c Release -p:Version=1.0.0 -o <временная папка>`, закрыть установленный трей, запустить копию из папки → через минуту в журнале `доступна версия <последний релиз>: https://github.com/lostintired/sbarda-kblight/releases/tag/v…`, в окне ссылка «доступна версия …». Сеть без интернета — `HTTPS_PROXY=http://127.0.0.1:9` → `проверка обновлений не удалась: …`.
+
 Что ещё не проверено руками — `docs/ARCHITECTURE.md`, §13.
 
 Перед опытами закрыть sbarda.exe. `kbtool.py` мьютекс KbLight не берёт — не запускать его, пока трей пишет. После опытов вернуть подсветку пользователя: `KbLight.exe --apply`. `settings.json` пользователя без нужды не трогать, а если трогали — вернуть как было.

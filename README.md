@@ -83,7 +83,7 @@ dotnet build src -c Release
 dotnet publish src -c Release -o publish    # publish\KbLight.exe, a single file
 ```
 
-Needs the .NET 10 SDK. No NuGet packages, no admin rights. The icon is rebuilt with `python tools/make_icon.py` (needs Pillow).
+Needs the .NET 10 SDK. Releases are built by GitHub Actions from the tag (`.github/workflows/release.yml`). No NuGet packages, no admin rights. The icon is rebuilt with `python tools/make_icon.py` (needs Pillow).
 
 ## For developers
 

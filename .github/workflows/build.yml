@@ -1,0 +1,27 @@
+# Gates for every push and pull request: the build has no warnings and the OpenSpec artifacts are valid.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build (no warnings allowed)
+        run: dotnet build src -c Release -warnaserror
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: OpenSpec validate
+        run: npx --yes @fission-ai/openspec@1.13.2 validate --all --strict

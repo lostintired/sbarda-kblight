@@ -27,6 +27,16 @@ dotnet publish src -c Release -o publish    # publish\KbLight.exe, один фа
 
 Версия — `<Version>` в `src/KbLight.csproj`, вместе с записью в `docs/CHANGELOG.md`.
 
+## Выпуск версии
+
+Только по явному слову пользователя — это публикация.
+
+1. `<Version>` в `src/KbLight.csproj`; в `docs/CHANGELOG.md` раздел «Не выпущено» → `## [X.Y.Z] — дата`; описание релиза по-английски для пользователей — `.github/release-notes/vX.Y.Z.md` (без него в релиз уйдёт русский раздел CHANGELOG).
+2. Коммит, `git push`; дождаться зелёного `Build` (`gh run list`).
+3. `git tag vX.Y.Z` и `git push origin vX.Y.Z` — workflow `Release` (`.github/workflows/release.yml`) собирает exe на GitHub, сверяет тег с `<Version>` и `--version`, считает SHA256 и создаёт релиз. Проверка после — `gh release view vX.Y.Z`, скачать exe и сверить хеш.
+
+`Build` (`.github/workflows/build.yml`) — ворота на каждый push в `main` и pull request: сборка с `-warnaserror` и `openspec validate --all --strict`.
+
 ## Проверка
 
 Автотестов нет: поведение завязано на живую клавиатуру. Проверка — сценарии ниже; результат смотрим в журнале `%LOCALAPPDATA%\KbLight\kblight.log` и прямым чтением клавиатуры.

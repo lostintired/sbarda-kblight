@@ -33,6 +33,8 @@
 | `tools/kbtool.py`, `tools/capture/` | диагностика и исследование протокола (PROTOCOL §10); `kbtool.py --pid XXXX` — одна модель |
 | `tools/make_model.py` | файл модели из подключённой клавиатуры и базы sbarda (`docs/ADDING-A-KEYBOARD.md`) |
 | `tools/make_icon.py` | сборка значка |
+| `.github/workflows/build.yml` | ворота на push и pull request: сборка с `-warnaserror`, `openspec validate --all --strict` |
+| `.github/workflows/release.yml`, `.github/scripts/release-notes.ps1` | релиз по тегу `vX.Y.Z`: сборка, сверка тега с `<Version>` и `--version`, описание из `.github/release-notes/` или CHANGELOG, SHA256, `gh release create` |
 
 ## 4. Потоки
 

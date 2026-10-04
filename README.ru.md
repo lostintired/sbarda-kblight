@@ -83,7 +83,7 @@ dotnet build src -c Release
 dotnet publish src -c Release -o publish    # publish\KbLight.exe, один файл
 ```
 
-Нужен .NET 10 SDK. Без NuGet-пакетов и без прав администратора. Значок пересобирается скриптом `python tools/make_icon.py` (нужен Pillow).
+Нужен .NET 10 SDK. Релизы собирает GitHub Actions по тегу (`.github/workflows/release.yml`). Без NuGet-пакетов и без прав администратора. Значок пересобирается скриптом `python tools/make_icon.py` (нужен Pillow).
 
 ## Документация и доработки
 

@@ -1,0 +1,41 @@
+# Push a tag v<major>.<minor>.<patch> that matches <Version> in src/KbLight.csproj:
+# builds KbLight.exe, checks it, and creates the GitHub release with the exe and its SHA256.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build (no warnings allowed)
+        run: dotnet build src -c Release -warnaserror
+
+      - name: Publish single-file exe
+        run: dotnet publish src -c Release -o publish
+
+      - name: Check the exe reports the tag's version
+        shell: pwsh
+        run: |
+          $out = & publish/KbLight.exe --version | Write-Output
+          if ($out -ne "KbLight $($env:GITHUB_REF_NAME.TrimStart('v'))") { throw "KbLight.exe --version printed '$out'" }
+
+      - name: Release notes and checksum
+        shell: pwsh
+        run: ./.github/scripts/release-notes.ps1 -Tag $env:GITHUB_REF_NAME -Exe publish/KbLight.exe -Out notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$env:GITHUB_REF_NAME" publish/KbLight.exe --title "KbLight $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes-file notes.md --verify-tag

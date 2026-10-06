@@ -169,11 +169,10 @@ sealed class TrayApp : ApplicationContext
 
     ApplyResult Apply(ApplyRequest request)
     {
-        var want = LightState.From(request.Settings);
         byte[]? fallback = request.Settings.GetLastGoodBlock();
         for (int attempt = 1; ; attempt++)
         {
-            var result = request.Adopt ? Keyboard.Read() : Keyboard.Apply(want, request.Force, fallback);
+            var result = request.Adopt ? Keyboard.Read() : Keyboard.Apply(request.Settings, request.Force, fallback);
             Log.Write($"{request.Reason}: {result.Status} — {result.Message}");
             bool retry = (result.Status is ApplyStatus.Failed or ApplyStatus.NotFound) && attempt < request.Attempts;
             if (!retry) return result;
@@ -191,7 +190,7 @@ sealed class TrayApp : ApplicationContext
         if (adopted)
         {
             _firstRun = false;
-            _settings.SetFromBlock(result.Block);
+            _settings.SetFromBlock(result.Block, result.Model);
             _settings.Model = result.Model?.Id;
             _form?.Reload();
         }
@@ -218,7 +217,19 @@ sealed class TrayApp : ApplicationContext
         }
 
         if (_firstRun) return; // nothing chosen yet, so no settings.json to keep the block in
-        if (adopted || modelChanged || result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
+
+        // Settings from before the light box (or another model's): take what the keyboard shows now. The write left
+        // bytes 24..31 alone, since the request had no light box; an edit made meanwhile has set one and wins.
+        bool boxTaken = false;
+        if (_settings.LightBox is null
+            && result is { Status: ApplyStatus.Written or ApplyStatus.AlreadySet, Block: { } read, Model.LightBox: true })
+        {
+            _settings.LightBox = LightBoxSettings.FromBlock(read);
+            boxTaken = true;
+            _form?.Reload();
+        }
+
+        if (adopted || modelChanged || boxTaken || result.Block is { } block && Convert.ToHexString(block) != _settings.LastGoodBlock)
         {
             if (result.Block is not null) _settings.LastGoodBlock = Convert.ToHexString(result.Block);
             SaveSettings();

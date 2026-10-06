@@ -2,7 +2,7 @@
 
 ![KbLight](docs/images/banner.jpg)
 
-*[Русская версия](README.ru.md)*
+*[Русский](README.ru.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md)*
 
 A small Windows tray app that keeps the RGB lighting you chose on a keyboard configured with the **sbarda** app. Lighting only — key mapping, macros and actuation stay with sbarda.
 
@@ -16,7 +16,9 @@ Tested on **ZORNER ZH99 HE** (Hall Effect, USB `19F5:FB2A`). Other sbarda keyboa
 
 KbLight writes your lighting to the keyboard when you sign in to Windows, when the keyboard is plugged in, after sleep and whenever you change it in its window. Every write is read back and checked.
 
-<p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="402"></p>
+**Light box.** The ZH99 HE also has an RGB neon light box that sbarda cannot set at all — only Fn+Home (mode), Fn+PgUp (brightness) and Fn+PgDn (color) change it, and it resets on power loss like the main lighting. KbLight 1.3.0 keeps it too: the **Light box** group in the window picks the mode (flowing lines, flashing, steady color, breathing, off), brightness, speed and any RGB color, and it is written together with the main lighting. The Fn keys still work, but KbLight puts its own light box back on the next write (after sleep, on plug-in), so change it in the window. Upgrading from 1.2.0 keeps whatever the light box shows now.
+
+<p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="416"></p>
 
 ## Install
 
@@ -44,7 +46,7 @@ You do not need sbarda running for the lighting. If you open it for other settin
 
 ## Updates
 
-The window shows the version ("KbLight 1.2.0"); `KbLight.exe --version | Write-Output` prints it in PowerShell.
+The window shows the version ("KbLight 1.3.0"); `KbLight.exe --version | Write-Output` prints it in PowerShell.
 
 While the tray is running, KbLight asks GitHub for the latest release a minute after it starts and then once a day. If there is a newer one, the window shows a "version N is available" link and Windows shows a notification once; both open the release page. Nothing is downloaded or installed automatically: to update, exit KbLight, replace `KbLight.exe` with the new one and start it.
 

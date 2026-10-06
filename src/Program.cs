@@ -55,7 +55,7 @@ static class Program
             return 3;
         }
         var settings = LightSettings.Load();
-        var result = Keyboard.Apply(LightState.From(settings), force, settings.GetLastGoodBlock());
+        var result = Keyboard.Apply(settings, force, settings.GetLastGoodBlock());
         Log.Write($"{mode}: {result.Status} — {result.Message}");
         return result.Status switch
         {

@@ -215,6 +215,24 @@ def main():
             r = kb.xfer(0x05, 0x20, 0)
             kb.xfer(0x02)
             print("readback:", r[8:8 + 0x20].hex(" "))
+        elif a[0] == "setbytes":
+            # setbytes <offset>=<hex> ...  e.g. setbytes 25=32 28=00 29=ff0000
+            kb.xfer(0x01)
+            r = kb.xfer(0x05, 0x20, 0)
+            d = bytearray(r[8:8 + 0x20])
+            for arg in a[1:]:
+                off, val = arg.split("=")
+                val = bytes.fromhex(val)
+                d[int(off, 0):int(off, 0) + len(val)] = val
+            print("before  :", r[8:8 + 0x20].hex(" "))
+            w = kb.xfer(0x06, 0x20, 0, bytes(d))
+            print("write reply:", w[:12].hex(" "))
+            time.sleep(0.4)
+            kb.xfer(0x02)
+            kb.xfer(0x01)
+            r = kb.xfer(0x05, 0x20, 0)
+            kb.xfer(0x02)
+            print("readback:", r[8:8 + 0x20].hex(" "))
     finally:
         kb.close()
 

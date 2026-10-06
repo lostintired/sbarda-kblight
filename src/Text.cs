@@ -124,6 +124,19 @@ static class Text
         [20] = ("Звёздный свет", "Starlight"), [21] = ("Фейерверк", "Fireworks"), [22] = ("Волновая полоса", "Wave Band"),
     };
 
+    // Light box group (spec interface-language, "Тексты light box"); the group title is the same in both languages.
+    public static string LightBoxCaption => "Light box";
+    public static string LightBoxModeCaption => T("Режим", "Mode");
+
+    public static string LightBoxModeName(int id) => id switch
+    {
+        0 => T("Плывущие линии", "Flowing lines"),
+        1 => T("Мигание", "Flashing"),
+        2 => T("Ровный цвет", "Steady color"),
+        3 => T("Дыхание", "Breathing"),
+        _ => T("Выключен", "Off"),
+    };
+
     public static string EffectName(int id) =>
         EffectNames.TryGetValue(id, out var name) ? T(name.Ru, name.En) : T($"эффект {id}", $"effect {id}");
 }

@@ -8,18 +8,25 @@ sealed class SettingsForm : Form
     readonly LightSettings _settings;
     readonly Label _model = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 8) };
     readonly ComboBox _effect = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
-    readonly TrackBar _brightness = new()
+    readonly TrackBar _brightness = BrightnessSlider();
+    readonly Label _brightnessValue = ValueLabel();
+    readonly TrackBar _speed = SpeedSlider();
+    readonly Label _speedValue = ValueLabel();
+    readonly Button _color = ColorButton();
+    readonly CheckBox _multicolor = MulticolorBox();
+    // Light box group (spec light-box), shown only for models that have one.
+    readonly Label _boxTitle = new()
     {
-        Maximum = 100, SmallChange = 5, LargeChange = 25, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
+        Text = KbLight.Text.LightBoxCaption, AutoSize = true, Font = new Font(DefaultFont, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3),
     };
-    readonly Label _brightnessValue = new() { AutoSize = true, Anchor = AnchorStyles.Left };
-    readonly TrackBar _speed = new()
-    {
-        Maximum = 4, LargeChange = 1, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
-    };
-    readonly Label _speedValue = new() { AutoSize = true, Anchor = AnchorStyles.Left };
-    readonly Button _color = new() { FlatStyle = FlatStyle.Flat, Size = new Size(56, 26), Margin = new Padding(3, 3, 12, 3) };
-    readonly CheckBox _multicolor = new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
+    readonly ComboBox _boxMode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
+    readonly TrackBar _boxBrightness = BrightnessSlider();
+    readonly Label _boxBrightnessValue = ValueLabel();
+    readonly TrackBar _boxSpeed = SpeedSlider();
+    readonly Label _boxSpeedValue = ValueLabel();
+    readonly Button _boxColor = ColorButton();
+    readonly CheckBox _boxMulticolor = MulticolorBox();
+    readonly List<Control> _boxRows = [];
     readonly CheckBox _reverse = new() { Text = KbLight.Text.ReverseDirection, AutoSize = true };
     readonly CheckBox _autostart = new() { Text = KbLight.Text.StartWithWindows, AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
     readonly CheckBox _checkUpdates = new() { Text = KbLight.Text.CheckUpdates, AutoSize = true };
@@ -59,6 +66,8 @@ sealed class SettingsForm : Form
 
         var colorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         colorRow.Controls.AddRange([_color, _multicolor]);
+        var boxColorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        boxColorRow.Controls.AddRange([_boxColor, _boxMulticolor]);
         var bottom = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -75,6 +84,14 @@ sealed class SettingsForm : Form
         AddRow(grid, KbLight.Text.SpeedCaption, _speed, _speedValue);
         AddRow(grid, KbLight.Text.ColorCaption, colorRow, span: 2);
         AddRow(grid, "", _reverse, span: 2);
+        grid.Controls.Add(_boxTitle, 0, grid.RowCount);
+        grid.SetColumnSpan(_boxTitle, 3);
+        grid.RowCount++;
+        _boxRows.Add(_boxTitle);
+        _boxRows.AddRange(AddRow(grid, KbLight.Text.LightBoxModeCaption, _boxMode, span: 2));
+        _boxRows.AddRange(AddRow(grid, KbLight.Text.BrightnessCaption, _boxBrightness, _boxBrightnessValue));
+        _boxRows.AddRange(AddRow(grid, KbLight.Text.SpeedCaption, _boxSpeed, _boxSpeedValue));
+        _boxRows.AddRange(AddRow(grid, KbLight.Text.ColorCaption, boxColorRow, span: 2));
         AddRow(grid, "", _autostart, span: 2);
         AddRow(grid, "", _checkUpdates, span: 2);
         grid.Controls.Add(_status, 0, grid.RowCount);
@@ -99,7 +116,12 @@ sealed class SettingsForm : Form
         _speed.ValueChanged += (_, _) => Edit(() => _settings.Speed = _speed.Value);
         _multicolor.CheckedChanged += (_, _) => Edit(() => _settings.Multicolor = _multicolor.Checked);
         _reverse.CheckedChanged += (_, _) => Edit(() => _settings.ReverseDirection = _reverse.Checked);
-        _color.Click += (_, _) => PickColor();
+        _color.Click += (_, _) => PickColor(_settings.GetColor(), _settings.SetColor);
+        _boxMode.SelectedIndexChanged += (_, _) => EditBox(b => b with { Mode = ((LightBoxMode)_boxMode.SelectedItem!).Id });
+        _boxBrightness.ValueChanged += (_, _) => EditBox(b => b with { Brightness = _boxBrightness.Value });
+        _boxSpeed.ValueChanged += (_, _) => EditBox(b => b with { Speed = _boxSpeed.Value });
+        _boxMulticolor.CheckedChanged += (_, _) => EditBox(b => b with { Multicolor = _boxMulticolor.Checked });
+        _boxColor.Click += (_, _) => PickColor(Box.GetColor(), c => _settings.LightBox = Box with { Rgb = LightSettings.FormatColor(c) });
         _autostart.CheckedChanged += (_, _) => { if (!_loading) AutostartToggled?.Invoke(_autostart.Checked); };
         _checkUpdates.CheckedChanged += (_, _) => { if (!_loading) UpdatesToggled?.Invoke(_checkUpdates.Checked); };
         _updateLink.LinkClicked += (_, _) => { if (_update is not null) UpdateCheck.Open(_update); };
@@ -125,15 +147,42 @@ sealed class SettingsForm : Form
         _loading = false;
     }
 
-    static void AddRow(TableLayoutPanel grid, string caption, Control control, Control? extra = null, int span = 1)
+    /// <returns>the controls of the row, to show or hide it as a whole</returns>
+    static List<Control> AddRow(TableLayoutPanel grid, string caption, Control control, Control? extra = null, int span = 1)
     {
         int row = grid.RowCount++;
+        var controls = new List<Control> { control };
         if (caption.Length > 0)
-            grid.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 3, 12, 3) }, 0, row);
+        {
+            var label = new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 3, 12, 3) };
+            grid.Controls.Add(label, 0, row);
+            controls.Add(label);
+        }
         grid.Controls.Add(control, 1, row);
         if (span > 1) grid.SetColumnSpan(control, span);
-        if (extra is not null) grid.Controls.Add(extra, 2, row);
+        if (extra is not null)
+        {
+            grid.Controls.Add(extra, 2, row);
+            controls.Add(extra);
+        }
+        return controls;
     }
+
+    static TrackBar BrightnessSlider() => new()
+    {
+        Maximum = 100, SmallChange = 5, LargeChange = 25, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
+    };
+
+    static TrackBar SpeedSlider() => new()
+    {
+        Maximum = 4, LargeChange = 1, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
+    };
+
+    static Label ValueLabel() => new() { AutoSize = true, Anchor = AnchorStyles.Left };
+
+    static Button ColorButton() => new() { FlatStyle = FlatStyle.Flat, Size = new Size(56, 26), Margin = new Padding(3, 3, 12, 3) };
+
+    static CheckBox MulticolorBox() => new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
 
     /// <summary>
     /// Shows settings that changed outside the window: lighting taken from the keyboard on first run,
@@ -152,7 +201,13 @@ sealed class SettingsForm : Form
         _model.Text = KbLight.Text.KeyboardLine(model?.Name);
         _effect.Items.Clear();
         foreach (var effect in (model ?? KeyboardModels.Default)?.Effects ?? []) _effect.Items.Add(effect);
+        if (_boxMode.Items.Count == 0) _boxMode.Items.AddRange([.. LightBoxMode.All]);
+        bool lightBox = (model ?? KeyboardModels.Default)?.LightBox == true;
+        foreach (var control in _boxRows) control.Visible = lightBox;
     }
+
+    /// <summary>The light box the window shows: the saved one, or the defaults until one is taken or edited.</summary>
+    LightBoxSettings Box => _settings.LightBox ?? new();
 
     Effect? CurrentEffect() => _effect.Items.Cast<Effect>().FirstOrDefault(e => e.Id == _settings.Effect);
 
@@ -164,6 +219,10 @@ sealed class SettingsForm : Form
         _speed.Value = Math.Clamp(_settings.Speed, 0, 4);
         _multicolor.Checked = _settings.Multicolor;
         _reverse.Checked = _settings.ReverseDirection;
+        _boxMode.SelectedItem = LightBoxMode.Find(Box.Mode);
+        _boxBrightness.Value = Math.Clamp(Box.Brightness, 0, 100);
+        _boxSpeed.Value = Math.Clamp(Box.Speed, 0, 4);
+        _boxMulticolor.Checked = Box.Multicolor;
         _autostart.Checked = autostart;
         _checkUpdates.Checked = _settings.CheckUpdates;
         _loading = false;
@@ -178,6 +237,8 @@ sealed class SettingsForm : Form
         SettingsChanged?.Invoke();
     }
 
+    void EditBox(Func<LightBoxSettings, LightBoxSettings> change) => Edit(() => _settings.LightBox = change(Box));
+
     void UpdateControls()
     {
         var options = CurrentEffect()?.Options ?? 0;
@@ -189,16 +250,30 @@ sealed class SettingsForm : Form
 
         _brightnessValue.Text = $"{_brightness.Value}%";
         _speedValue.Text = KbLight.Text.SpeedValue(_speed.Value + 1);
-        var color = _settings.GetColor();
-        _color.BackColor = _color.Enabled ? color : Color.FromArgb(color.A, (color.R + 128) / 2, (color.G + 128) / 2, (color.B + 128) / 2);
-        _color.FlatAppearance.BorderColor = SystemColors.ControlDark;
+        ShowSwatch(_color, _settings.GetColor());
+
+        var boxOptions = LightBoxMode.Find(Box.Mode).Options;
+        _boxBrightness.Enabled = boxOptions.HasFlag(EffectOptions.Brightness);
+        _boxSpeed.Enabled = boxOptions.HasFlag(EffectOptions.Speed);
+        _boxMulticolor.Enabled = boxOptions.HasFlag(EffectOptions.Multicolor);
+        _boxColor.Enabled = boxOptions.HasFlag(EffectOptions.Color) && !(_boxMulticolor.Enabled && _boxMulticolor.Checked);
+        _boxBrightnessValue.Text = $"{_boxBrightness.Value}%";
+        _boxSpeedValue.Text = KbLight.Text.SpeedValue(_boxSpeed.Value + 1);
+        ShowSwatch(_boxColor, Box.GetColor());
     }
 
-    void PickColor()
+    /// <summary>Paints the color sample; a disabled button gets a muted one.</summary>
+    static void ShowSwatch(Button button, Color color)
     {
-        using var dialog = new ColorDialog { Color = _settings.GetColor(), FullOpen = true };
+        button.BackColor = button.Enabled ? color : Color.FromArgb(color.A, (color.R + 128) / 2, (color.G + 128) / 2, (color.B + 128) / 2);
+        button.FlatAppearance.BorderColor = SystemColors.ControlDark;
+    }
+
+    void PickColor(Color current, Action<Color> set)
+    {
+        using var dialog = new ColorDialog { Color = current, FullOpen = true };
         if (dialog.ShowDialog(this) == DialogResult.OK)
-            Edit(() => _settings.SetColor(dialog.Color));
+            Edit(() => set(dialog.Color));
     }
 
     static LinkLabel NewLink(string text, Action open)

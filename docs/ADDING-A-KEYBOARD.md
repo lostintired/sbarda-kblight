@@ -94,6 +94,7 @@ It takes VID, PID and the interface from the connected keyboard and the effect l
 | `effects[].id` | effect code written to byte 8 |
 | `effects[].options` | which controls the window enables: `brightness`, `speed`, `color`, `multicolor`, and one of `direction-horizontal`, `direction-vertical`, `direction-radial`, `direction-rotation` |
 | `effects[].name` | optional; without it the name comes from the code table above, in the program language |
+| `lightBox` | optional, `true` only if the keyboard has an RGB neon light box whose settings sit in bytes 24–31 of the settings block, as on the ZH99 HE (`docs/PROTOCOL.md`, §4). The window then shows the Light box group, and KbLight writes those bytes. Leave it out unless you have checked it on your keyboard: Fn+PgUp should change byte 25 in `python tools/kbtool.py read` |
 
 A file with the same VID:PID as a built-in model replaces it — handy to fix a built-in model too.
 

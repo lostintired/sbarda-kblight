@@ -15,8 +15,9 @@ namespace KbLight;
 // Commands used here: 01 open session, 02 close session,
 //                     05 read / 06 write the 32-byte settings block at offset 0.
 // Settings block: [2..3] AA BB marker, [8] effect, [9] brightness 0..100, [10] 4 - speed (speed 0..4),
-//   [11] direction, [12] multicolor, [13] color index, [14..16] R G B. The other bytes hold
-//   non-lighting settings (report rate, dead zones...) and go back unchanged, as sbarda.exe does.
+//   [11] direction, [12] multicolor, [13] color index, [14..16] R G B. Models with a light box:
+//   [24] mode, [25] brightness, [26] 4 - speed, [27] Fn color index (kept), [28] multicolor, [29..31] R G B.
+//   The other bytes hold non-lighting settings (report rate, dead zones...) and go back unchanged, as sbarda.exe does.
 
 enum ApplyStatus { NotFound, Unsupported, AlreadySet, Written, Failed }
 
@@ -25,17 +26,30 @@ enum ApplyStatus { NotFound, Unsupported, AlreadySet, Written, Failed }
 sealed record ApplyResult(ApplyStatus Status, string Message, byte[]? Block = null, KeyboardModel? Model = null,
     string? UnknownId = null);
 
+/// <param name="Box">light box bytes 24, 25, 26, 28, 29, 30, 31, or null to leave bytes 24..31 as read</param>
 readonly record struct LightState(
-    byte Effect, byte Brightness, byte Speed, byte Direction, bool Multicolor, byte ColorIndex, Color Color)
+    byte Effect, byte Brightness, byte Speed, byte Direction, bool Multicolor, byte ColorIndex, Color Color, byte[]? Box)
 {
     const int Offset = 8, Length = 9;
+    static readonly int[] BoxOffsets = [24, 25, 26, 28, 29, 30, 31]; // byte 27 is the Fn+PgDn color index, not ours
 
-    public static LightState From(LightSettings s)
+    /// <summary>The bytes for this keyboard: the light box part only if the model has one and the settings hold it.</summary>
+    public static LightState From(LightSettings s, KeyboardModel? model)
     {
         var c = s.GetColor();
         return new((byte)Math.Clamp(s.Effect, 0, 255), (byte)Math.Clamp(s.Brightness, 0, 100),
             (byte)Math.Clamp(s.Speed, 0, 4), (byte)(s.ReverseDirection ? 1 : 0), s.Multicolor,
-            (byte)Math.Clamp(s.ColorIndex, 0, 255), Color.FromArgb(c.R, c.G, c.B));
+            (byte)Math.Clamp(s.ColorIndex, 0, 255), Color.FromArgb(c.R, c.G, c.B),
+            model?.LightBox == true && s.LightBox is { } box ? BoxBytes(box) : null);
+    }
+
+    static byte[] BoxBytes(LightBoxSettings box)
+    {
+        var mode = LightBoxMode.Find(box.Mode);
+        var c = box.GetColor();
+        bool multicolor = box.Multicolor && mode.Options.HasFlag(EffectOptions.Multicolor);
+        return [(byte)mode.Id, (byte)Math.Clamp(box.Brightness, 0, 100), (byte)(4 - Math.Clamp(box.Speed, 0, 4)),
+            (byte)(multicolor ? 1 : 0), c.R, c.G, c.B];
     }
 
     public void WriteTo(Span<byte> block)
@@ -43,18 +57,26 @@ readonly record struct LightState(
         ReadOnlySpan<byte> bytes = [Effect, Brightness, (byte)(4 - Speed), Direction,
             (byte)(Multicolor ? 1 : 0), ColorIndex, Color.R, Color.G, Color.B];
         bytes.CopyTo(block.Slice(Offset, Length));
+        if (Box is null) return;
+        for (int i = 0; i < BoxOffsets.Length; i++) block[BoxOffsets[i]] = Box[i];
     }
 
     public bool Matches(ReadOnlySpan<byte> block)
     {
         Span<byte> wanted = stackalloc byte[Keyboard.BlockLength];
+        block.CopyTo(wanted);
         WriteTo(wanted);
-        return block.Slice(Offset, Length).SequenceEqual(wanted.Slice(Offset, Length));
+        return block.SequenceEqual(wanted);
     }
 
-    public static string Describe(ReadOnlySpan<byte> block) =>
+    /// <summary>The state for the log; the light box part whenever the model has one, even if KbLight does not hold it yet.</summary>
+    public static string Describe(ReadOnlySpan<byte> block, KeyboardModel? model) =>
         $"effect={block[8]} brightness={block[9]} speed={4 - block[10]} dir={block[11]} " +
-        $"multicolor={block[12]} colorIndex={block[13]} rgb={block[14]:X2}{block[15]:X2}{block[16]:X2}";
+        $"multicolor={block[12]} colorIndex={block[13]} rgb={block[14]:X2}{block[15]:X2}{block[16]:X2}" +
+        (model?.LightBox == true
+            ? $" | box mode={block[24]} brightness={block[25]} speed={4 - block[26]} multicolor={block[28]} " +
+              $"rgb={block[29]:X2}{block[30]:X2}{block[31]:X2}"
+            : "");
 }
 
 static class Keyboard
@@ -86,9 +108,9 @@ static class Keyboard
 
     /// <param name="force">write even if the keyboard already reports the wanted lighting</param>
     /// <param name="fallbackBlock">base block for the write if the keyboard returns a damaged one</param>
-    public static ApplyResult Apply(LightState want, bool force, byte[]? fallbackBlock)
+    public static ApplyResult Apply(LightSettings settings, bool force, byte[]? fallbackBlock)
     {
-        return ForEachInterface(path => ApplyTo(path, want, force, fallbackBlock), results =>
+        return ForEachInterface((path, model) => ApplyTo(path, model, LightState.From(settings, model), force, fallbackBlock), results =>
             results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
             ?? results.FirstOrDefault(r => r.Status == ApplyStatus.Written)
             ?? results[0]);
@@ -105,7 +127,7 @@ static class Keyboard
     /// Runs the action on the settings interface of every connected keyboard that has a model file.
     /// Sbarda-vendor keyboards without one are never opened.
     /// </summary>
-    static ApplyResult ForEachInterface(Func<string, ApplyResult> action, Func<List<ApplyResult>, ApplyResult> combine)
+    static ApplyResult ForEachInterface(Func<string, KeyboardModel, ApplyResult> action, Func<List<ApplyResult>, ApplyResult> combine)
     {
         // Serializes with other KbLight processes (e.g. a one-shot --apply next to the tray instance).
         using var deviceLock = new Mutex(false, @"Local\KbLight.Device");
@@ -125,7 +147,7 @@ static class Keyboard
                     if (ids.Vid == SbardaVid && !models.Any(m => m.Vid == ids.Vid && m.Pid == ids.Pid)) unknown.Add(ids.Pid);
                     continue;
                 }
-                try { results.Add(action(path) with { Model = model }); }
+                try { results.Add(action(path, model) with { Model = model }); }
                 catch (Exception e) when (e is IOException or TimeoutException or Win32Exception)
                 {
                     results.Add(new(ApplyStatus.Failed, e.Message, Model: model));
@@ -147,7 +169,7 @@ static class Keyboard
         }
     }
 
-    static ApplyResult ReadFrom(string path)
+    static ApplyResult ReadFrom(string path, KeyboardModel model)
     {
         using var device = HidDevice.Open(path);
         if (device is null) return new(ApplyStatus.Failed, Text.OpenFailed);
@@ -159,10 +181,10 @@ static class Keyboard
 
         return block is null
             ? new(ApplyStatus.Failed, Text.BadBlockNotTaken)
-            : new(ApplyStatus.AlreadySet, Text.Adopted(LightState.Describe(block)), block);
+            : new(ApplyStatus.AlreadySet, Text.Adopted(LightState.Describe(block, model)), block);
     }
 
-    static ApplyResult ApplyTo(string path, LightState want, bool force, byte[]? fallbackBlock)
+    static ApplyResult ApplyTo(string path, KeyboardModel model, LightState want, bool force, byte[]? fallbackBlock)
     {
         using var device = HidDevice.Open(path);
         if (device is null) return new(ApplyStatus.Failed, Text.OpenFailed);
@@ -175,7 +197,7 @@ static class Keyboard
         {
             current = ReadBlock(device);
             if (current is not null && !force && want.Matches(current))
-                return new(ApplyStatus.AlreadySet, Text.AlreadySet(LightState.Describe(current)), current);
+                return new(ApplyStatus.AlreadySet, Text.AlreadySet(LightState.Describe(current, model)), current);
 
             byte[] block;
             if (current is not null)
@@ -192,7 +214,7 @@ static class Keyboard
                 return new(ApplyStatus.Failed, Text.BadBlockCancelled);
             }
 
-            before = current is null ? "?" : LightState.Describe(current);
+            before = current is null ? "?" : LightState.Describe(current, model);
             want.WriteTo(block);
             device.Command(CmdWrite, BlockLength, block);
             Thread.Sleep(400); // sbarda.exe waits the same before closing the session
@@ -209,7 +231,7 @@ static class Keyboard
 
         if (after is null || !want.Matches(after))
             return new(ApplyStatus.Failed, Text.NotConfirmed, current);
-        return new(ApplyStatus.Written, Text.Written(before, LightState.Describe(after)), after);
+        return new(ApplyStatus.Written, Text.Written(before, LightState.Describe(after, model)), after);
     }
 
     /// <returns>the settings block, or null if the reply does not look like one</returns>

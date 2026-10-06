@@ -25,6 +25,51 @@ sealed record Effect(int Id, string Name, EffectOptions Options)
     public override string ToString() => Name;
 }
 
+/// <summary>A light box mode (byte 24) and the options the window enables for it (spec light-box).</summary>
+sealed record LightBoxMode(int Id, EffectOptions Options)
+{
+    public static readonly IReadOnlyList<LightBoxMode> All =
+    [
+        new(0, EffectOptions.Brightness | EffectOptions.Speed | EffectOptions.Color | EffectOptions.Multicolor), // flowing lines
+        new(1, EffectOptions.Brightness | EffectOptions.Speed),                                                  // flashing, always multicolor
+        new(2, EffectOptions.Brightness | EffectOptions.Color),                                                  // steady; multicolor is plain red
+        new(3, EffectOptions.Brightness | EffectOptions.Speed | EffectOptions.Color | EffectOptions.Multicolor), // breathing
+        new(4, 0),                                                                                               // off
+    ];
+
+    /// <summary>The mode for a code, out-of-range codes clamped to 0..4.</summary>
+    public static LightBoxMode Find(int id) => All[Math.Clamp(id, 0, All.Count - 1)];
+
+    public string Name => Text.LightBoxModeName(Id);
+
+    public override string ToString() => Name;
+}
+
+/// <summary>
+/// Light box settings. Immutable, so the tray's settings snapshot (a shallow clone) never changes under the write thread;
+/// the window replaces the whole object with a <c>with</c> copy.
+/// </summary>
+sealed record LightBoxSettings
+{
+    public int Mode { get; init; }
+    public int Brightness { get; init; } = 100; // 0..100
+    public int Speed { get; init; } = 2;        // 0..4, as on the slider
+    public bool Multicolor { get; init; } = true;
+    public string Rgb { get; init; } = "#FF0000";
+
+    public Color GetColor() => LightSettings.ParseColor(Rgb);
+
+    /// <summary>Takes the light box from a settings block read from the keyboard (bytes 24..31, byte 27 aside).</summary>
+    public static LightBoxSettings FromBlock(ReadOnlySpan<byte> block) => new()
+    {
+        Mode = Math.Clamp((int)block[24], 0, LightBoxMode.All.Count - 1),
+        Brightness = Math.Min((int)block[25], 100),
+        Speed = Math.Clamp(4 - block[26], 0, 4),
+        Multicolor = block[28] != 0,
+        Rgb = $"#{block[29]:X2}{block[30]:X2}{block[31]:X2}",
+    };
+}
+
 sealed class LightSettings
 {
     public int Effect { get; set; } = 13;
@@ -34,6 +79,9 @@ sealed class LightSettings
     public bool Multicolor { get; set; } = true;
     public int ColorIndex { get; set; }
     public string Rgb { get; set; } = "#FF0000";
+
+    // Null until taken from a keyboard with a light box or edited in the window; until then bytes 24..31 are left alone.
+    public LightBoxSettings? LightBox { get; set; }
 
     // Last valid settings block read from the keyboard (hex). Used as the base for a write
     // if the keyboard ever answers with a damaged block, so its other settings stay intact.
@@ -71,17 +119,26 @@ sealed class LightSettings
 
     public LightSettings Clone() => (LightSettings)MemberwiseClone();
 
-    public Color GetColor()
+    public Color GetColor() => ParseColor(Rgb);
+
+    /// <summary>#RRGGBB as a color; an unreadable one is red.</summary>
+    public static Color ParseColor(string rgb)
     {
-        try { return ColorTranslator.FromHtml(Rgb); }
+        try { return ColorTranslator.FromHtml(rgb); }
         catch (Exception) { return Color.Red; }
     }
 
-    public void SetColor(Color c) => Rgb = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+    public void SetColor(Color c) => Rgb = FormatColor(c);
 
-    /// <summary>Takes the lighting from a settings block read from the keyboard (bytes 8..16).</summary>
-    public void SetFromBlock(ReadOnlySpan<byte> block)
+    public static string FormatColor(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    /// <summary>
+    /// Takes the lighting from a settings block read from the keyboard (bytes 8..16),
+    /// and the light box (bytes 24..31) if the model has one.
+    /// </summary>
+    public void SetFromBlock(ReadOnlySpan<byte> block, KeyboardModel? model)
     {
+        if (model?.LightBox == true) LightBox = LightBoxSettings.FromBlock(block);
         Effect = block[8];
         Brightness = Math.Min((int)block[9], 100);
         Speed = Math.Clamp(4 - block[10], 0, 4);

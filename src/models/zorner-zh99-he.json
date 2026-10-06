@@ -3,6 +3,7 @@
   "vid": "19F5",
   "pid": "FB2A",
   "interface": 1,
+  "lightBox": true,
   "effects": [
     { "id": 1, "options": ["brightness", "speed"] },
     { "id": 2, "options": ["brightness", "color", "multicolor"] },

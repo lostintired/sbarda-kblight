@@ -3,8 +3,10 @@ using System.Text.Json;
 
 namespace KbLight;
 
-/// <summary>A keyboard KbLight may write to: USB ids, the settings interface and its lighting effects.</summary>
-sealed record KeyboardModel(string Name, ushort Vid, ushort Pid, byte Interface, IReadOnlyList<Effect> Effects, string? File)
+/// <summary>A keyboard KbLight may write to: USB ids, the settings interface, its lighting effects and
+/// whether it has a light box (settings block bytes 24..31, spec light-box).</summary>
+sealed record KeyboardModel(string Name, ushort Vid, ushort Pid, byte Interface, IReadOnlyList<Effect> Effects, bool LightBox,
+    string? File)
 {
     public string Id => FormatId(Vid, Pid);
 
@@ -127,6 +129,7 @@ static class KeyboardModels
         public string? Pid { get; set; }
         public int? Interface { get; set; }
         public List<EffectFile>? Effects { get; set; }
+        public bool LightBox { get; set; }
     }
 
     sealed class EffectFile
@@ -157,7 +160,7 @@ static class KeyboardModels
             string name = string.IsNullOrWhiteSpace(e.Name) ? Effect.KnownName(e.Id.Value) : e.Name.Trim();
             effects.Add(new Effect(e.Id.Value, name, options));
         }
-        return new KeyboardModel(data.Name.Trim(), vid, pid, (byte)data.Interface.Value, effects, file);
+        return new KeyboardModel(data.Name.Trim(), vid, pid, (byte)data.Interface.Value, effects, data.LightBox, file);
     }
 
     static ushort ParseId(string? text, string field) =>

@@ -29,7 +29,7 @@ static class Log
                 var file = new FileInfo(AppFiles.Log);
                 if (file.Exists && file.Length > MaxBytes)
                     File.Move(AppFiles.Log, AppFiles.Log + ".old", overwrite: true);
-                File.AppendAllText(AppFiles.Log, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}");
+                File.AppendAllText(AppFiles.Log, $"{LocalClock.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}");
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

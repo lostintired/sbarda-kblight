@@ -6,6 +6,8 @@ namespace KbLight;
 sealed class SettingsForm : Form
 {
     readonly LightSettings _settings;
+    readonly CheckBox _enabled = new() { Text = KbLight.Text.KeysEnabled, AutoSize = true };
+    readonly CheckBox _boxEnabled = new() { Text = KbLight.Text.BoxEnabled, AutoSize = true };
     readonly Label _model = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 8) };
     readonly ComboBox _effect = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
     readonly TrackBar _brightness = BrightnessSlider();
@@ -30,6 +32,10 @@ sealed class SettingsForm : Form
     readonly CheckBox _reverse = new() { Text = KbLight.Text.ReverseDirection, AutoSize = true };
     readonly CheckBox _autostart = new() { Text = KbLight.Text.StartWithWindows, AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
     readonly CheckBox _checkUpdates = new() { Text = KbLight.Text.CheckUpdates, AutoSize = true };
+    readonly CheckBox _quietEnabled = new() { Text = KbLight.Text.QuietHoursEnabled, AutoSize = true };
+    readonly DateTimePicker _quietStart = TimePicker();
+    readonly DateTimePicker _quietEnd = TimePicker();
+    readonly Label _quietState = new() { AutoSize = true, MaximumSize = new Size(350, 0) };
     readonly Label _version = new() { Text = AppVersion.Text, AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 3, 0, 3) };
     readonly LinkLabel _updateLink = new() { AutoSize = true, Visible = false, Margin = new Padding(0, 3, 3, 3) };
     ReleaseInfo? _update;
@@ -54,7 +60,11 @@ sealed class SettingsForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        AutoScroll = true;
+        MaximumSize = Screen.FromPoint(Cursor.Position).WorkingArea.Size;
         Padding = new Padding(12);
+        Shown += (_, _) => FitWorkingArea();
+        DpiChanged += (_, _) => BeginInvoke(FitWorkingArea);
 
         var close = new Button { Text = KbLight.Text.Close, AutoSize = true, Anchor = AnchorStyles.Right };
         close.Click += (_, _) => Close();
@@ -79,6 +89,7 @@ sealed class SettingsForm : Form
         grid.Controls.Add(_model, 0, grid.RowCount);
         grid.SetColumnSpan(_model, 3);
         grid.RowCount++;
+        AddRow(grid, "", _enabled, span: 2);
         AddRow(grid, KbLight.Text.EffectCaption, _effect, span: 2);
         AddRow(grid, KbLight.Text.BrightnessCaption, _brightness, _brightnessValue);
         AddRow(grid, KbLight.Text.SpeedCaption, _speed, _speedValue);
@@ -88,10 +99,29 @@ sealed class SettingsForm : Form
         grid.SetColumnSpan(_boxTitle, 3);
         grid.RowCount++;
         _boxRows.Add(_boxTitle);
+        _boxRows.AddRange(AddRow(grid, "", _boxEnabled, span: 2));
         _boxRows.AddRange(AddRow(grid, KbLight.Text.LightBoxModeCaption, _boxMode, span: 2));
         _boxRows.AddRange(AddRow(grid, KbLight.Text.BrightnessCaption, _boxBrightness, _boxBrightnessValue));
         _boxRows.AddRange(AddRow(grid, KbLight.Text.SpeedCaption, _boxSpeed, _boxSpeedValue));
         _boxRows.AddRange(AddRow(grid, KbLight.Text.ColorCaption, boxColorRow, span: 2));
+        var quietTitle = new Label
+        {
+            Text = KbLight.Text.QuietHoursCaption, AutoSize = true, Font = new Font(DefaultFont, FontStyle.Bold),
+            Margin = new Padding(3, 12, 3, 3),
+        };
+        grid.Controls.Add(quietTitle, 0, grid.RowCount++);
+        grid.SetColumnSpan(quietTitle, 3);
+        AddRow(grid, "", _quietEnabled, span: 2);
+        var times = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        times.Controls.AddRange([
+            new Label { Text = KbLight.Text.QuietHoursFrom, AutoSize = true, Margin = new Padding(3, 5, 6, 3) },
+            _quietStart,
+            new Label { Text = KbLight.Text.QuietHoursUntil, AutoSize = true, Margin = new Padding(12, 5, 6, 3) },
+            _quietEnd,
+        ]);
+        AddRow(grid, "", times, span: 2);
+        AddRow(grid, "", new Label { Text = KbLight.Text.QuietHoursHelp, AutoSize = true, MaximumSize = new Size(350, 0) }, span: 2);
+        AddRow(grid, "", _quietState, span: 2);
         AddRow(grid, "", _autostart, span: 2);
         AddRow(grid, "", _checkUpdates, span: 2);
         grid.Controls.Add(_status, 0, grid.RowCount);
@@ -111,6 +141,11 @@ sealed class SettingsForm : Form
         FillEffects();
         LoadValues(autostart);
 
+        _enabled.CheckedChanged += (_, _) => Edit(() => _settings.Enabled = _enabled.Checked);
+        _boxEnabled.CheckedChanged += (_, _) => Edit(() => _settings.LightBoxEnabled = _boxEnabled.Checked);
+        _quietEnabled.CheckedChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { Enabled = _quietEnabled.Checked });
+        _quietStart.ValueChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { Start = FormatTime(_quietStart) });
+        _quietEnd.ValueChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { End = FormatTime(_quietEnd) });
         _effect.SelectedIndexChanged += (_, _) => Edit(() => _settings.Effect = ((Effect)_effect.SelectedItem!).Id);
         _brightness.ValueChanged += (_, _) => Edit(() => _settings.Brightness = _brightness.Value);
         _speed.ValueChanged += (_, _) => Edit(() => _settings.Speed = _speed.Value);
@@ -130,6 +165,22 @@ sealed class SettingsForm : Form
     }
 
     public void SetStatus(string text) => _status.Text = text;
+
+    public void SetQuietHoursState(QuietHoursState state)
+    {
+        string text = !state.IsValid ? KbLight.Text.QuietHoursInvalid
+            : state.SameTime ? KbLight.Text.QuietHoursSameTime
+            : state.Active ? KbLight.Text.QuietHoursActive(state.End) : "";
+        if (_quietState.Text != text) _quietState.Text = text;
+    }
+
+    void FitWorkingArea()
+    {
+        var area = Screen.FromControl(this).WorkingArea;
+        MaximumSize = area.Size;
+        Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)),
+            Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height)));
+    }
 
     /// <summary>Shows "version N is available" after the version line, or hides it.</summary>
     public void SetUpdate(ReleaseInfo? release)
@@ -184,6 +235,19 @@ sealed class SettingsForm : Form
 
     static CheckBox MulticolorBox() => new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
 
+    static DateTimePicker TimePicker() => new()
+    {
+        Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true, Width = 85,
+    };
+
+    static string FormatTime(DateTimePicker picker) => picker.Value.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    static void LoadTime(DateTimePicker picker, string? text, int fallbackHour)
+    {
+        var time = QuietHoursState.TryTime(text, out var parsed) ? parsed : new TimeOnly(fallbackHour, 0);
+        picker.Value = DateTime.Today.Add(time.ToTimeSpan());
+    }
+
     /// <summary>
     /// Shows settings that changed outside the window: lighting taken from the keyboard on first run,
     /// or another keyboard model with its own effect list.
@@ -214,6 +278,11 @@ sealed class SettingsForm : Form
     void LoadValues(bool autostart)
     {
         _loading = true;
+        _enabled.Checked = _settings.Enabled;
+        _boxEnabled.Checked = _settings.LightBoxEnabled;
+        _quietEnabled.Checked = _settings.QuietHours.Enabled;
+        LoadTime(_quietStart, _settings.QuietHours.Start, 23);
+        LoadTime(_quietEnd, _settings.QuietHours.End, 9);
         _effect.SelectedItem = CurrentEffect();
         _brightness.Value = Math.Clamp(_settings.Brightness, 0, 100);
         _speed.Value = Math.Clamp(_settings.Speed, 0, 4);
@@ -241,7 +310,8 @@ sealed class SettingsForm : Form
 
     void UpdateControls()
     {
-        var options = CurrentEffect()?.Options ?? 0;
+        _effect.Enabled = _settings.Enabled;
+        var options = _settings.Enabled ? CurrentEffect()?.Options ?? 0 : 0;
         _brightness.Enabled = options.HasFlag(EffectOptions.Brightness);
         _speed.Enabled = options.HasFlag(EffectOptions.Speed);
         _multicolor.Enabled = options.HasFlag(EffectOptions.Multicolor);
@@ -252,7 +322,8 @@ sealed class SettingsForm : Form
         _speedValue.Text = KbLight.Text.SpeedValue(_speed.Value + 1);
         ShowSwatch(_color, _settings.GetColor());
 
-        var boxOptions = LightBoxMode.Find(Box.Mode).Options;
+        _boxMode.Enabled = _settings.LightBoxEnabled;
+        var boxOptions = _settings.LightBoxEnabled ? LightBoxMode.Find(Box.Mode).Options : 0;
         _boxBrightness.Enabled = boxOptions.HasFlag(EffectOptions.Brightness);
         _boxSpeed.Enabled = boxOptions.HasFlag(EffectOptions.Speed);
         _boxMulticolor.Enabled = boxOptions.HasFlag(EffectOptions.Multicolor);
@@ -260,6 +331,8 @@ sealed class SettingsForm : Form
         _boxBrightnessValue.Text = $"{_boxBrightness.Value}%";
         _boxSpeedValue.Text = KbLight.Text.SpeedValue(_boxSpeed.Value + 1);
         ShowSwatch(_boxColor, Box.GetColor());
+        _quietStart.Enabled = _quietEnd.Enabled = _settings.QuietHours.Enabled;
+        SetQuietHoursState(QuietHoursState.At(_settings.QuietHours, LocalClock.Now));
     }
 
     /// <summary>Paints the color sample; a disabled button gets a muted one.</summary>

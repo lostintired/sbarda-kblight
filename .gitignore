@@ -1,6 +1,8 @@
 # Сборка
 src/bin/
 src/obj/
+tools/LightingPolicyChecks/bin/
+tools/LightingPolicyChecks/obj/
 publish/
 
 # Python

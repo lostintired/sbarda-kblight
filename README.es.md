@@ -20,6 +20,10 @@ KbLight escribe tu iluminación en el teclado cuando inicias sesión en Windows,
 
 **Light box (caja de luz).** El ZH99 HE también tiene una caja de luz de neón RGB que sbarda no puede configurar en absoluto: solo la cambian Fn+Home (modo), Fn+PgUp (brillo) y Fn+PgDn (color), y se restablece al cortarse la alimentación, igual que la iluminación principal. KbLight 1.3.0 también la conserva: el grupo **Light box** de la ventana elige el modo (líneas en movimiento, destellos, color fijo, respiración, apagada), el brillo, la velocidad y cualquier color RGB, y se escribe junto con la iluminación principal. Las teclas Fn siguen funcionando, pero KbLight restablece su propia caja de luz en la siguiente escritura (tras la suspensión, al conectar el teclado), así que haz los cambios en la ventana. Al actualizar desde la 1.2.0 se conserva lo que muestre ahora la caja de luz.
 
+**Interruptores y horas de descanso.** «Key lighting enabled» y «Light box enabled» apagan cada iluminación por separado y conservan el brillo, el efecto y el color. Al volver a encenderla se recuperan esos ajustes. El modo «Off» de Light box sigue siendo válido.
+
+En **Quiet hours** puedes activar un horario diario que apaga por completo ambas luces. El intervalo inicial es **23:00–09:00** y el horario está desactivado por defecto. Las horas se pueden cambiar y siguen la hora local de Windows. Al terminar se recuperan los ajustes anteriores; una luz apagada manualmente permanece apagada. También puedes editar el brillo diurno durante la noche. El inicio está incluido y el final excluido; horas iguales desactivan el intervalo. KbLight debe estar ejecutándose en la bandeja; no despierta el ordenador y respeta el horario al iniciar, conectar y reanudar. `--apply` y `--check` también lo respetan; si aún falta `LightBox` en el archivo, estos comandos no cambian esa luz: inicia primero la aplicación en la bandeja para guardar sus ajustes.
+
 <p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="416"></p>
 
 ## Instalación

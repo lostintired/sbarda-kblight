@@ -38,6 +38,30 @@ static class Text
     public static string ExitMenu => T("Выход", "Exit");
     public static string AutostartError(string error) => T("Не удалось изменить автозапуск:\n", "Could not change autostart:\n") + error;
 
+    public static string KeysEnabled => T("Подсветка клавиш включена", "Key lighting enabled");
+    public static string BoxEnabled => T("Light box включён", "Light box enabled");
+    public static string QuietHoursCaption => T("Тихие часы", "Quiet hours");
+    public static string QuietHoursEnabled => T("Выключать подсветку по расписанию", "Turn off lighting on a schedule");
+    public static string QuietHoursFrom => T("С", "From");
+    public static string QuietHoursUntil => T("До", "Until");
+    public static string QuietHoursHelp => T("В тихие часы обе подсветки выключены. После окончания вернутся прежние настройки.",
+        "Both lights are off during quiet hours. Previous settings return afterwards.");
+    public static string QuietHoursSameTime => T("Начало и окончание совпадают — тихие часы не действуют",
+        "Start and end are the same — quiet hours are inactive");
+    public static string QuietHoursInvalid => T("Проверьте время тихих часов", "Check the quiet hours times");
+    public static string QuietHoursInvalidLog => T("неверное время тихих часов; расписание не действует",
+        "invalid quiet hours time; schedule is inactive");
+    public static string QuietHoursActive(TimeOnly end)
+    {
+        string time = end.ToString("HH:mm", CultureInfo.InvariantCulture);
+        return T($"Тихие часы до {time}", $"Quiet hours until {time}");
+    }
+    public static string QuietHoursApplied(TimeOnly end) => QuietHoursActive(end) + T(" — подсветка выключена", " — lighting off");
+    public static string LightsState(int keysBrightness, int? boxBrightness) =>
+        T("Клавиши: ", "Keys: ") + (keysBrightness == 0 ? T("выключены", "off") : BrightnessState(keysBrightness))
+        + (boxBrightness is { } box ? "; Light box: " + (box == 0 ? T("выключен", "off") : BrightnessState(box)) : "");
+    static string BrightnessState(int brightness) => T($"яркость {brightness}%", $"brightness {brightness}%");
+
     // Status line and tray tooltip
     public static string Applying => T("применяю…", "applying…");
     public static string Describe(string effect, int brightness) => T($"{effect}, яркость {brightness}%", $"{effect}, brightness {brightness}%");
@@ -54,6 +78,8 @@ static class Text
     public static string ReasonResumed => T("выход из сна", "resume from sleep");
     public static string ReasonEdited => T("изменены настройки", "settings changed");
     public static string ReasonManual => T("вручную", "manual");
+    public static string ReasonQuietStart => T("начало тихих часов", "quiet hours started");
+    public static string ReasonQuietEnd => T("окончание тихих часов", "quiet hours ended");
 
     // Log messages
     public static string LogStart(string? path) => T("запуск ", "start ") + path;

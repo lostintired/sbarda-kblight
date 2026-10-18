@@ -20,6 +20,10 @@ O KbLight grava a sua iluminação no teclado quando você entra no Windows, qua
 
 **Caixa de luz.** O ZH99 HE também tem uma caixa de luz neon RGB que o sbarda não consegue configurar de forma alguma — só Fn+Home (modo), Fn+PgUp (brilho) e Fn+PgDn (cor) a alteram, e ela é redefinida na queda de energia, como a iluminação principal. O KbLight 1.3.0 também a mantém: o grupo **Light box** (caixa de luz) na janela escolhe o modo (linhas fluindo, piscando, cor fixa, respiração, desligada), o brilho, a velocidade e qualquer cor RGB, e ela é gravada junto com a iluminação principal. As teclas Fn continuam funcionando, mas o KbLight restaura a sua própria caixa de luz na próxima gravação (após a suspensão, ao conectar), então altere-a pela janela. Ao atualizar da versão 1.2.0, a caixa de luz mantém o que mostra agora.
 
+**Interruptores e horário de descanso.** “Key lighting enabled” e “Light box enabled” apagam cada iluminação separadamente, preservando brilho, efeito e cor. Ao ligar novamente, os ajustes são restaurados. O modo “Off” selecionado para a Light box continua valendo.
+
+Em **Quiet hours**, você pode ativar um horário diário para apagar completamente as duas luzes. O intervalo inicial é **23:00–09:00**, desativado por padrão. Os horários podem ser alterados e seguem a hora local do Windows. Ao terminar, os ajustes anteriores voltam; uma luz desligada manualmente permanece apagada. Você pode editar o brilho diurno durante a noite. O início está incluído e o fim excluído; horários iguais deixam o intervalo inativo. O KbLight precisa estar em execução na bandeja; não desperta o computador e respeita o horário ao iniciar, conectar e retomar do modo de suspensão. `--apply` e `--check` também o respeitam; se ainda não houver `LightBox` no arquivo, esses comandos não alteram essa luz: execute primeiro o aplicativo na bandeja para memorizar seus ajustes.
+
 <p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="416"></p>
 
 ## Instalação

@@ -72,6 +72,11 @@ sealed record LightBoxSettings
 
 sealed class LightSettings
 {
+    public bool Enabled { get; set; } = true;
+    public bool LightBoxEnabled { get; set; } = true;
+    QuietHoursSettings _quietHours = new();
+    public QuietHoursSettings QuietHours { get => _quietHours; set => _quietHours = value ?? new(); }
+
     public int Effect { get; set; } = 13;
     public int Brightness { get; set; } = 100;  // 0..100
     public int Speed { get; set; }              // 0..4, as on sbarda's slider
@@ -101,7 +106,9 @@ sealed class LightSettings
     {
         try
         {
-            return JsonSerializer.Deserialize<LightSettings>(File.ReadAllText(AppFiles.Settings), JsonOptions) ?? new();
+            var settings = JsonSerializer.Deserialize<LightSettings>(File.ReadAllText(AppFiles.Settings), JsonOptions) ?? new();
+            if (!QuietHoursState.At(settings.QuietHours, LocalClock.Now).IsValid) Log.Write(Text.QuietHoursInvalidLog);
+            return settings;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {

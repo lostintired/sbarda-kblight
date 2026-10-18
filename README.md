@@ -18,6 +18,10 @@ KbLight writes your lighting to the keyboard when you sign in to Windows, when t
 
 **Light box.** The ZH99 HE also has an RGB neon light box that sbarda cannot set at all — only Fn+Home (mode), Fn+PgUp (brightness) and Fn+PgDn (color) change it, and it resets on power loss like the main lighting. KbLight 1.3.0 keeps it too: the **Light box** group in the window picks the mode (flowing lines, flashing, steady color, breathing, off), brightness, speed and any RGB color, and it is written together with the main lighting. The Fn keys still work, but KbLight puts its own light box back on the next write (after sleep, on plug-in), so change it in the window. Upgrading from 1.2.0 keeps whatever the light box shows now.
 
+**Switches and quiet hours.** “Key lighting enabled” and “Light box enabled” switch each light off independently while keeping its brightness, effect and color. Switching it back on restores those settings. A selected Light box “Off” mode still takes effect.
+
+Enable a daily schedule in **Quiet hours** to turn both lights off completely. The initial interval is **23:00–09:00**; scheduling is disabled by default. You can change the times, which follow the Windows local clock. When quiet hours end, previous settings return; a light switched off manually stays off. You can edit daytime brightness during quiet hours. The start is inclusive and the end exclusive; identical times make quiet hours inactive. Scheduling requires KbLight running in the tray, never wakes the computer, and is respected on startup, connection and resume. `--apply` and `--check` respect it too; if `LightBox` is still missing from the file, one-shot commands leave that light untouched — run the tray first to remember its settings.
+
 <p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="416"></p>
 
 ## Install

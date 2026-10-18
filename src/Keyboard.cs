@@ -24,7 +24,21 @@ enum ApplyStatus { NotFound, Unsupported, AlreadySet, Written, Failed }
 /// <param name="Model">the keyboard model the result came from (null for NotFound and Unsupported)</param>
 /// <param name="UnknownId">VID:PID of the keyboard without a model file, for Unsupported</param>
 sealed record ApplyResult(ApplyStatus Status, string Message, byte[]? Block = null, KeyboardModel? Model = null,
-    string? UnknownId = null);
+    string? UnknownId = null, LightingPolicy? Policy = null)
+{
+    public string DescribeApplied(LightSettings settings)
+    {
+        if (Block is not { } block) return settings.Describe(Model);
+        int? box = Model?.LightBox == true ? (block[24] == 4 ? 0 : block[25]) : null;
+        if (Policy is { Schedule.Active: true } policy && block[9] == 0 && (box is null or 0))
+            return Text.QuietHoursApplied(policy.Schedule.End);
+        if (!settings.Enabled || Model?.LightBox == true && !settings.LightBoxEnabled)
+            return Text.LightsState(block[9], box);
+        var applied = settings.Clone();
+        applied.Brightness = block[9];
+        return applied.Describe(Model);
+    }
+}
 
 /// <param name="Box">light box bytes 24, 25, 26, 28, 29, 30, 31, or null to leave bytes 24..31 as read</param>
 readonly record struct LightState(
@@ -34,21 +48,21 @@ readonly record struct LightState(
     static readonly int[] BoxOffsets = [24, 25, 26, 28, 29, 30, 31]; // byte 27 is the Fn+PgDn color index, not ours
 
     /// <summary>The bytes for this keyboard: the light box part only if the model has one and the settings hold it.</summary>
-    public static LightState From(LightSettings s, KeyboardModel? model)
+    public static LightState From(LightSettings s, KeyboardModel? model, LightingPolicy policy)
     {
         var c = s.GetColor();
-        return new((byte)Math.Clamp(s.Effect, 0, 255), (byte)Math.Clamp(s.Brightness, 0, 100),
+        return new((byte)Math.Clamp(s.Effect, 0, 255), (byte)(policy.KeysOff ? 0 : Math.Clamp(s.Brightness, 0, 100)),
             (byte)Math.Clamp(s.Speed, 0, 4), (byte)(s.ReverseDirection ? 1 : 0), s.Multicolor,
             (byte)Math.Clamp(s.ColorIndex, 0, 255), Color.FromArgb(c.R, c.G, c.B),
-            model?.LightBox == true && s.LightBox is { } box ? BoxBytes(box) : null);
+            model?.LightBox == true && s.LightBox is { } box ? BoxBytes(box, policy.BoxOff) : null);
     }
 
-    static byte[] BoxBytes(LightBoxSettings box)
+    static byte[] BoxBytes(LightBoxSettings box, bool off)
     {
         var mode = LightBoxMode.Find(box.Mode);
         var c = box.GetColor();
         bool multicolor = box.Multicolor && mode.Options.HasFlag(EffectOptions.Multicolor);
-        return [(byte)mode.Id, (byte)Math.Clamp(box.Brightness, 0, 100), (byte)(4 - Math.Clamp(box.Speed, 0, 4)),
+        return [(byte)mode.Id, (byte)(off ? 0 : Math.Clamp(box.Brightness, 0, 100)), (byte)(4 - Math.Clamp(box.Speed, 0, 4)),
             (byte)(multicolor ? 1 : 0), c.R, c.G, c.B];
     }
 
@@ -110,10 +124,11 @@ static class Keyboard
     /// <param name="fallbackBlock">base block for the write if the keyboard returns a damaged one</param>
     public static ApplyResult Apply(LightSettings settings, bool force, byte[]? fallbackBlock)
     {
-        return ForEachInterface((path, model) => ApplyTo(path, model, LightState.From(settings, model), force, fallbackBlock), results =>
+        LightingPolicy policy = default;
+        return ForEachInterface((path, model) => ApplyTo(path, model, LightState.From(settings, model, policy), force, fallbackBlock), results =>
             results.FirstOrDefault(r => r.Status == ApplyStatus.Failed)
             ?? results.FirstOrDefault(r => r.Status == ApplyStatus.Written)
-            ?? results[0]);
+            ?? results[0], () => policy = LightingPolicy.At(settings, LocalClock.Now)) with { Policy = policy };
     }
 
     /// <summary>Reads the lighting the keyboard holds now, without writing anything.</summary>
@@ -127,7 +142,8 @@ static class Keyboard
     /// Runs the action on the settings interface of every connected keyboard that has a model file.
     /// Sbarda-vendor keyboards without one are never opened.
     /// </summary>
-    static ApplyResult ForEachInterface(Func<string, KeyboardModel, ApplyResult> action, Func<List<ApplyResult>, ApplyResult> combine)
+    static ApplyResult ForEachInterface(Func<string, KeyboardModel, ApplyResult> action, Func<List<ApplyResult>, ApplyResult> combine,
+        Action? beforeApply = null)
     {
         // Serializes with other KbLight processes (e.g. a one-shot --apply next to the tray instance).
         using var deviceLock = new Mutex(false, @"Local\KbLight.Device");
@@ -136,6 +152,7 @@ static class Keyboard
         catch (AbandonedMutexException) { locked = true; }
         try
         {
+            beforeApply?.Invoke();
             var models = KeyboardModels.Current();
             var results = new List<ApplyResult>();
             var unknown = new SortedSet<ushort>();

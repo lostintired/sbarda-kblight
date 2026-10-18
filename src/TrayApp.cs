@@ -17,6 +17,7 @@ sealed class TrayApp : ApplicationContext
     readonly System.Windows.Forms.Timer _resumeDelay = new() { Interval = 3000 };
     readonly System.Windows.Forms.Timer _editDelay = new() { Interval = 300 };
     readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = FirstUpdateCheckMs };
+    readonly System.Windows.Forms.Timer _quietTimer = new() { Interval = 1000 };
     readonly EventWaitHandle _showSignal = new(false, EventResetMode.AutoReset, ShowSignalName);
     readonly RegisteredWaitHandle _showWait;
     SettingsForm? _form;
@@ -24,6 +25,8 @@ sealed class TrayApp : ApplicationContext
     // No settings.json yet: requests read the keyboard's lighting instead of writing ours over it.
     bool _firstRun;
     string _status = Text.Applying;
+    bool _quietActive;
+    long _requestId, _shownRequestId;
 
     // Update check (spec update-check): runs on a pool thread, results come back through _ui.
     ReleaseInfo? _update;
@@ -35,12 +38,13 @@ sealed class TrayApp : ApplicationContext
     readonly ManualResetEventSlim _idle = new(true);
     ApplyRequest? _pending;
 
-    sealed record ApplyRequest(LightSettings Settings, bool Force, string Reason, int Attempts, bool Adopt);
+    sealed record ApplyRequest(LightSettings Settings, bool Force, string Reason, int Attempts, bool Adopt, long Id);
 
     public TrayApp(bool showSettings)
     {
         _firstRun = !LightSettings.Exists;
         _settings = LightSettings.Load();
+        _quietActive = LightingPolicy.At(_settings, LocalClock.Now).Schedule.Active;
 
         _autostartItem = new ToolStripMenuItem(Text.StartWithWindows, null, (_, _) => SetAutostart(!_autostart));
         var menu = new ContextMenuStrip();
@@ -70,6 +74,7 @@ sealed class TrayApp : ApplicationContext
         _arrivalDelay.Tick += (_, _) => { _arrivalDelay.Stop(); RequestApply(force: true, Text.ReasonArrived, attempts: 3); };
         _resumeDelay.Tick += (_, _) => { _resumeDelay.Stop(); RequestApply(force: false, Text.ReasonResumed, attempts: 3); };
         _editDelay.Tick += (_, _) => FlushEdits();
+        _quietTimer.Tick += (_, _) => CheckQuietHours();
         _updateTimer.Tick += (_, _) =>
         {
             _updateTimer.Interval = UpdateCheckPeriodMs;
@@ -82,6 +87,7 @@ sealed class TrayApp : ApplicationContext
         Log.Write(Text.LogStart(Environment.ProcessPath) + (showSettings ? "" : " --tray"));
         Log.Write(AppVersion.Text);
         RequestApply(force: true, Text.ReasonStartup, attempts: 6);
+        _quietTimer.Start();
         if (_settings.CheckUpdates) _updateTimer.Start();
         Task.Run(() =>
         {
@@ -98,6 +104,7 @@ sealed class TrayApp : ApplicationContext
     {
         FlushEdits();
         _updateTimer.Stop();
+        _quietTimer.Stop();
         _form?.Close();
         _tray.Visible = false;
         _tray.Dispose();
@@ -119,6 +126,7 @@ sealed class TrayApp : ApplicationContext
         if (!_editDelay.Enabled) return;
         _editDelay.Stop();
         _firstRun = false;
+        _quietActive = LightingPolicy.At(_settings, LocalClock.Now).Schedule.Active;
         SaveSettings();
         RequestApply(force: true, Text.ReasonEdited);
     }
@@ -134,7 +142,7 @@ sealed class TrayApp : ApplicationContext
 
     void RequestApply(bool force, string reason, int attempts = 1)
     {
-        var request = new ApplyRequest(_settings.Clone(), force, reason, attempts, _firstRun);
+        var request = new ApplyRequest(_settings.Clone(), force, reason, attempts, _firstRun, ++_requestId);
         lock (_gate)
         {
             bool busy = _pending is not null || !_idle.IsSet;
@@ -145,6 +153,16 @@ sealed class TrayApp : ApplicationContext
             _idle.Reset();
         }
         Task.Run(Worker);
+    }
+
+    void CheckQuietHours()
+    {
+        var state = LightingPolicy.At(_settings, LocalClock.Now).Schedule;
+        _form?.SetQuietHoursState(state);
+        if (state.Active == _quietActive) return;
+        _quietActive = state.Active;
+        if (_editDelay.Enabled) return;
+        RequestApply(force: false, state.Active ? Text.ReasonQuietStart : Text.ReasonQuietEnd, attempts: 3);
     }
 
     void Worker()
@@ -197,16 +215,20 @@ sealed class TrayApp : ApplicationContext
         if (request.Adopt && !adopted && result.Status == ApplyStatus.AlreadySet)
             return; // the user edited meanwhile; the edit's own write reports the status
 
-        _status = result.Status switch
+        if (request.Id >= _shownRequestId)
         {
-            ApplyStatus.Written or ApplyStatus.AlreadySet =>
-                Text.AppliedAt((adopted ? _settings : request.Settings).Describe(result.Model), DateTime.Now),
-            ApplyStatus.NotFound => Text.StatusNotFound,
-            ApplyStatus.Unsupported => Text.StatusUnsupported(result.UnknownId),
-            _ => Text.StatusFailed(result.Message),
-        };
-        UpdateTooltip();
-        _form?.SetStatus(_status);
+            _shownRequestId = request.Id;
+            _status = result.Status switch
+            {
+                ApplyStatus.Written or ApplyStatus.AlreadySet =>
+                    Text.AppliedAt(result.DescribeApplied(adopted ? _settings : request.Settings), LocalClock.Now),
+                ApplyStatus.NotFound => Text.StatusNotFound,
+                ApplyStatus.Unsupported => Text.StatusUnsupported(result.UnknownId),
+                _ => Text.StatusFailed(result.Message),
+            };
+            UpdateTooltip();
+            _form?.SetStatus(_status);
+        }
 
         bool modelChanged = false;
         if (result is { Status: ApplyStatus.Written or ApplyStatus.AlreadySet, Model: { } model } && model.Id != _settings.Model)
@@ -234,6 +256,10 @@ sealed class TrayApp : ApplicationContext
             if (result.Block is not null) _settings.LastGoodBlock = Convert.ToHexString(result.Block);
             SaveSettings();
         }
+
+        if ((adopted || boxTaken) && LightingPolicy.At(_settings, LocalClock.Now) is var policy
+            && (adopted && policy.KeysOff || result.Model?.LightBox == true && policy.BoxOff))
+            RequestApply(force: false, request.Reason, attempts: 3);
     }
 
     void UpdateTooltip()

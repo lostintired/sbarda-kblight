@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/*.cs" Exclude="../../src/Program.cs;../../src/AppFiles.cs" Link="Source/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../src/app.ico" LogicalName="KbLight.app.ico" />
+    <EmbeddedResource Include="../../src/models/*.json" LogicalName="KbLight.models.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

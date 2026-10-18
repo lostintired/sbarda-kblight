@@ -101,4 +101,3 @@
 #### Scenario: Ошибка в файле модели по-английски
 - **WHEN** выбран английский, в файле модели `test.json` параметр `brighness`
 - **THEN** в журнале `model file test.json not read: unknown option brighness`
-

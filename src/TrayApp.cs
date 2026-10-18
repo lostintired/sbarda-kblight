@@ -46,16 +46,9 @@ sealed class TrayApp : ApplicationContext
         _settings = LightSettings.Load();
         _quietActive = LightingPolicy.At(_settings, LocalClock.Now).Schedule.Active;
 
-        _autostartItem = new ToolStripMenuItem(Text.StartWithWindows, null, (_, _) => SetAutostart(!_autostart));
-        var menu = new ContextMenuStrip();
-        var settingsItem = new ToolStripMenuItem(Text.SettingsMenu, null, (_, _) => ShowSettings());
-        settingsItem.Font = new Font(settingsItem.Font, FontStyle.Bold);
-        menu.Items.Add(settingsItem);
-        menu.Items.Add(Text.ApplyNowMenu, null, (_, _) => RequestApply(force: true, Text.ReasonManual));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(_autostartItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(Text.ExitMenu, null, (_, _) => ExitThread());
+        var menu = CreateMenu(ShowSettings,
+            () => RequestApply(force: true, Text.ReasonManual),
+            () => SetAutostart(!_autostart), ExitThread, out _autostartItem);
 
         _tray = new NotifyIcon
         {
@@ -97,6 +90,36 @@ sealed class TrayApp : ApplicationContext
         if (showSettings) ShowSettings();
     }
 
+    internal static ContextMenuStrip CreateMenu(Action showSettings, Action restore, Action toggleAutostart, Action exit,
+        out ToolStripMenuItem autostartItem)
+    {
+        var menu = new ContextMenuStrip
+        {
+            Renderer = new ToolStripSystemRenderer(),
+            BackColor = SystemColors.Menu,
+            ForeColor = SystemColors.MenuText,
+            ShowImageMargin = false,
+            ShowCheckMargin = true,
+        };
+        var settingsItem = new ToolStripMenuItem(Text.SettingsMenu, null, (_, _) => showSettings());
+        var defaultFont = new Font(settingsItem.Font, FontStyle.Bold);
+        settingsItem.Font = defaultFont;
+        menu.Disposed += (_, _) => defaultFont.Dispose();
+        menu.Items.Add(settingsItem);
+        menu.Items.Add(Text.ApplyNowMenu, null, (_, _) => restore());
+        menu.Items.Add(new ToolStripSeparator());
+        autostartItem = new ToolStripMenuItem(Text.StartWithWindows, null, (_, _) => toggleAutostart());
+        menu.Items.Add(autostartItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Text.ExitMenu, null, (_, _) => exit());
+        foreach (ToolStripItem item in menu.Items)
+        {
+            item.BackColor = SystemColors.Menu;
+            item.ForeColor = SystemColors.MenuText;
+        }
+        return menu;
+    }
+
     /// <summary>Waits for an apply in progress, so exiting never cuts a keyboard session in half.</summary>
     public bool WaitIdle(TimeSpan timeout) => _idle.Wait(timeout);
 
@@ -107,6 +130,7 @@ sealed class TrayApp : ApplicationContext
         _quietTimer.Stop();
         _form?.Close();
         _tray.Visible = false;
+        _tray.ContextMenuStrip?.Dispose();
         _tray.Dispose();
         _watcher.Dispose();
         _showWait.Unregister(null);

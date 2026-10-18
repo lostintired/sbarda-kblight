@@ -33,6 +33,7 @@ static class Checks
             CheckSettings();
             CheckBlocks();
             if (args.Contains("--ui")) CheckWindow(args);
+            if (args.Contains("--menu")) CheckMenu(args);
             if (args.Contains("--device")) CheckDevice();
             if (args.Contains("--tray")) CheckTray();
             if (args.Contains("--wait")) CheckWait();
@@ -170,6 +171,40 @@ static class Checks
 
     static T Field<T>(object instance, string name) => (T)instance.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(instance)!;
 
+    static void CheckMenu(string[] args)
+    {
+        Application.SetColorMode(SystemColorMode.Dark);
+        int settings = 0, restore = 0, autostart = 0, exit = 0;
+        using var menu = TrayApp.CreateMenu(() => settings++, () => restore++, () => autostart++, () => exit++, out var start);
+        Check("Меню: системный renderer", menu.Renderer is ToolStripSystemRenderer);
+        Check("Меню: системные цвета", menu.BackColor == SystemColors.Menu && menu.ForeColor == SystemColors.MenuText);
+        Check("Меню: состав", menu.Items.Count == 6);
+        Check("Меню: восстановление", menu.Items[1].Text == KbLight.Text.ApplyNowMenu);
+        Check("Меню: переводы", KbLight.Text.ApplyNowMenu == (KbLight.Text.Ru ? "Восстановить подсветку" : "Restore lighting"));
+        ((ToolStripMenuItem)menu.Items[0]).PerformClick();
+        ((ToolStripMenuItem)menu.Items[1]).PerformClick();
+        start.PerformClick();
+        ((ToolStripMenuItem)menu.Items[5]).PerformClick();
+        Check("Меню: независимые действия", settings == 1 && restore == 1 && autostart == 1 && exit == 1);
+        start.Checked = true;
+        using var host = new Form { TopMost = true, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual,
+            Location = new Point(120,120), Size = new Size(450,240) };
+        host.Show(); host.Activate(); Application.DoEvents();
+        menu.Show(host, new Point(20,20));
+        Application.DoEvents(); Thread.Sleep(200);
+        Check("Меню: видно на экране", menu.Visible);
+        Check("Меню: галочка автозапуска", start.Checked);
+        Check("Меню: renderer после открытия", menu.Renderer is ToolStripSystemRenderer);
+        int imageArg = Array.IndexOf(args, "--menu-image");
+        if (imageArg >= 0)
+        {
+            using var bitmap = new Bitmap(menu.Width, menu.Height);
+            using (var g = Graphics.FromImage(bitmap)) g.CopyFromScreen(menu.Location, Point.Empty, bitmap.Size);
+            bitmap.Save(args[imageArg + 1]);
+        }
+        menu.Close();
+    }
+
     static void CheckWindow(string[] args)
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
@@ -256,6 +291,48 @@ static class Checks
             using var bitmap = new Bitmap(form.Width, form.Height);
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(args[imageArg + 1]);
+        }
+        int liveArg = Array.IndexOf(args, "--live-image");
+        if (liveArg >= 0)
+        {
+            for (int paintPass = 0; paintPass < 2; paintPass++)
+            {
+                if (paintPass == 1)
+                    foreach (var name in new[] { "_enabled", "_boxEnabled", "_multicolor", "_boxMulticolor", "_autostart", "_checkUpdates", "_quietEnabled", "_reverse" })
+                    {
+                        var check = Field<CheckBox>(form, name);
+                        check.Checked = !check.Checked;
+                    }
+                form.TopMost = true; form.Activate(); form.Refresh(); Application.DoEvents(); Thread.Sleep(250);
+                foreach (var name in new[] { "_enabled", "_multicolor", "_quietEnabled" })
+                {
+                    var control = Field<Control>(form, name);
+                    var style = typeof(Control).GetMethod("GetStyle", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(control, [ControlStyles.UserPaint]);
+                    Console.WriteLine(name + ": UserPaint=" + style);
+                }
+                using var live = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
+                using (var g = Graphics.FromImage(live)) g.CopyFromScreen(form.PointToScreen(Point.Empty), Point.Empty, live.Size);
+                string livePath = args[liveArg + 1];
+                if (paintPass == 1) livePath = Path.Combine(Path.GetDirectoryName(livePath)!, Path.GetFileNameWithoutExtension(livePath) + "-toggled.png");
+                live.Save(livePath);
+                foreach (var name in new[] { "_enabled", "_boxEnabled", "_multicolor", "_boxMulticolor", "_autostart", "_checkUpdates", "_quietEnabled", "_reverse" })
+                {
+                    var control = Field<Control>(form, name);
+                    using var reference = new Bitmap(control.Width, control.Height);
+                    control.DrawToBitmap(reference, new Rectangle(Point.Empty, control.Size));
+                    var origin = form.PointToClient(control.PointToScreen(Point.Empty));
+                    int different = 0;
+                    for (int y = 0; y < reference.Height; y++)
+                        for (int x = 0; x < reference.Width; x++)
+                        {
+                            var a = reference.GetPixel(x,y); var b = live.GetPixel(origin.X+x,origin.Y+y);
+                            if (Math.Abs(a.R-b.R)+Math.Abs(a.G-b.G)+Math.Abs(a.B-b.B)>45) different++;
+                        }
+                    double ratio = different / (double)(reference.Width * reference.Height);
+                    Console.WriteLine(name + ": screen difference=" + ratio.ToString("P2"));
+                    Check("Реальный рисунок совпадает с отдельной отрисовкой: " + name, ratio < .03);
+                }
+            }
         }
         Directory.CreateDirectory(KeyboardModels.Folder);
         File.WriteAllText(Path.Combine(KeyboardModels.Folder, "no-box.json"),

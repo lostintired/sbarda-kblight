@@ -14,24 +14,28 @@ static class LightingTheme
         int enabled = 1;
         _ = DwmSetWindowAttribute(window, 20, ref enabled, sizeof(int));
     }
-    public static readonly Color Background = Color.FromArgb(0x17, 0x19, 0x1c);
-    public static readonly Color Panel = Color.FromArgb(0x20, 0x23, 0x27);
-    public static readonly Color Field = Color.FromArgb(0x19, 0x1c, 0x20);
-    public static readonly Color Border = Color.FromArgb(0x3a, 0x40, 0x47);
-    public static readonly Color Foreground = Color.FromArgb(0xe8, 0xea, 0xed);
-    public static readonly Color Muted = Color.FromArgb(0xa3, 0xa9, 0xb1);
-    public static readonly Color Accent = Color.FromArgb(0x80, 0xcb, 0xb9);
+    public static readonly Color Background = Color.FromArgb(0x14, 0x13, 0x16);
+    public static readonly Color Panel = Color.FromArgb(0x20, 0x1d, 0x24);
+    public static readonly Color Field = Color.FromArgb(0x17, 0x15, 0x1b);
+    public static readonly Color Border = Color.FromArgb(0x3f, 0x38, 0x47);
+    public static readonly Color Foreground = Color.FromArgb(0xf3, 0xf1, 0xf5);
+    public static readonly Color Muted = Color.FromArgb(0xb5, 0xad, 0xbc);
+    public static readonly Color Accent = Color.FromArgb(0xfa, 0x2d, 0x4c);
+    public static readonly Color SecondaryAccent = Color.FromArgb(0xbf, 0x2f, 0xdf);
+    public static readonly Color Link = Color.FromArgb(0xd8, 0xa3, 0xf0);
+    public static readonly Color SecondaryPanel = Color.FromArgb(0x1a, 0x18, 0x1e);
+    public static readonly Color ButtonSurface = Color.FromArgb(0x31, 0x2c, 0x36);
     public static readonly Color Error = Color.FromArgb(0xf4, 0xa6, 0xa6);
 
     public static void Apply(Control parent)
     {
         foreach (Control c in parent.Controls)
         {
-            c.ForeColor = c.ForeColor == Error ? Error : c is LinkLabel ? Accent : c is Label && !c.Font.Bold ? Muted : Foreground;
+            c.ForeColor = c.ForeColor == Error ? Error : c is LinkLabel ? Link : c is Label && !c.Font.Bold ? Muted : Foreground;
             if (c is TextBox or ComboBox or DateTimePicker) c.BackColor = Field;
             else if (c is not Button && c is not System.Windows.Forms.Panel && c is not UserControl) c.BackColor = parent.BackColor;
             if (c is CheckBox cb) cb.UseVisualStyleBackColor = false;
-            if (c is LinkLabel link) link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = Accent;
+            if (c is LinkLabel link) link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = Link;
             Apply(c);
         }
     }
@@ -43,6 +47,7 @@ sealed class LightingSwitch : CheckBox
     public bool ShowStateCaption { get; init; } = true;
     public LightingSwitch()
     {
+        FlatStyle = FlatStyle.Flat;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         AutoSize = false;
         Size = new Size(80, 28);
@@ -52,12 +57,13 @@ sealed class LightingSwitch : CheckBox
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        e.Graphics.Clear(BackColor);
         float s = DeviceDpi / 96f;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var track = new RectangleF(Width - 34 * s, (Height - 18 * s) / 2, 32 * s, 18 * s);
         using var path = new GraphicsPath();
         path.AddRoundedRectangle(track, new SizeF(9 * s, 9 * s));
-        using var brush = new SolidBrush(Enabled && Checked ? LightingTheme.Accent : LightingTheme.Border);
+        using Brush brush = Enabled && Checked ? new LinearGradientBrush(track, LightingTheme.Accent, LightingTheme.SecondaryAccent, 0f) : new SolidBrush(LightingTheme.Border);
         e.Graphics.FillPath(brush, path);
         using var knob = new SolidBrush(Checked ? LightingTheme.Field : LightingTheme.Muted);
         e.Graphics.FillEllipse(knob, track.X + (Checked ? 17 : 3) * s, track.Y + 3 * s, 12 * s, 12 * s);
@@ -120,7 +126,8 @@ sealed class LightingSlider : Control
         {
             using var track = new Pen(LightingTheme.Border, 4 * s);
             e.Graphics.DrawLine(track, left, y, right, y);
-            using var fill = new Pen(Enabled ? LightingTheme.Accent : LightingTheme.Muted, 4 * s);
+            using Brush ink = Enabled ? new LinearGradientBrush(new PointF(left, y), new PointF(right, y), LightingTheme.Accent, LightingTheme.SecondaryAccent) : new SolidBrush(LightingTheme.Muted);
+            using var fill = new Pen(ink, 4 * s);
             e.Graphics.DrawLine(fill, left, y, x, y);
         }
         using var knob = new SolidBrush(Enabled ? LightingTheme.Foreground : LightingTheme.Muted);
@@ -172,11 +179,13 @@ sealed class LightingCheckBox : CheckBox
 {
     public LightingCheckBox()
     {
+        FlatStyle = FlatStyle.Flat;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         UseVisualStyleBackColor = false;
     }
     protected override void OnPaint(PaintEventArgs e)
     {
+        e.Graphics.Clear(BackColor);
         int box = (int)(13 * DeviceDpi / 96f), y = (Height - box) / 2;
         using var pen = new Pen(Enabled ? LightingTheme.Muted : LightingTheme.Border);
         using var fill = new SolidBrush(Checked && Enabled ? LightingTheme.Accent : LightingTheme.Field);
@@ -300,7 +309,8 @@ sealed class LightingIcon : Control
         var state = e.Graphics.Save();
         e.Graphics.TranslateTransform((Width - 32 * scale) / 2, (Height - 32 * scale) / 2);
         e.Graphics.ScaleTransform(scale, scale);
-        using var pen = new Pen(Glyph == LightingGlyph.Brand ? LightingTheme.Accent : LightingTheme.Muted, 1.6f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using Brush ink = Glyph == LightingGlyph.Brand ? new LinearGradientBrush(new PointF(3, 0), new PointF(29, 0), LightingTheme.Accent, LightingTheme.SecondaryAccent) : new SolidBrush(LightingTheme.Muted);
+        using var pen = new Pen(ink, 1.6f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
         void Rect(float x, float y, float w, float h) => e.Graphics.DrawRoundedRectangle(pen, new RectangleF(x, y, w, h), new SizeF(2, 2));
         if (Glyph == LightingGlyph.Keys)
         {

@@ -49,7 +49,7 @@ static class Text
     public static string ModelsLink => T("Модели", "Models");
     public static string Close => T("Закрыть", "Close");
     public static string SettingsMenu => T("Настройки подсветки…", "Lighting settings…");
-    public static string ApplyNowMenu => T("Применить сейчас", "Apply now");
+    public static string ApplyNowMenu => T("Восстановить подсветку", "Restore lighting");
     public static string ExitMenu => T("Выход", "Exit");
     public static string AutostartError(string error) => T("Не удалось изменить автозапуск:\n", "Could not change autostart:\n") + error;
 

@@ -90,7 +90,7 @@ sealed class SettingsForm : Form
         _footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         _footer.Controls.Add(_status, 0, 0);
-        var close = new Button { Text = KbLight.Text.Close, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(46, 52, 58), UseVisualStyleBackColor = false, Margin = new Padding(0, 4, 0, 4) };
+        var close = new Button { Text = KbLight.Text.Close, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = LightingTheme.ButtonSurface, UseVisualStyleBackColor = false, Margin = new Padding(0, 4, 0, 4) };
         close.FlatAppearance.BorderColor = LightingTheme.Border;
         close.Click += (_, _) => Close(); CancelButton = close;
         _footer.Controls.Add(close, 1, 0); layout.Controls.Add(_footer, 0, 2);
@@ -172,7 +172,7 @@ sealed class SettingsForm : Form
 
     TableLayoutPanel ProgramPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 1, Dock = DockStyle.Fill, BackColor = Color.FromArgb(28, 31, 35), Padding = new Padding(16, 14, 16, 10), Margin = Padding.Empty };
+        var panel = new TableLayoutPanel { ColumnCount = 1, Dock = DockStyle.Fill, BackColor = LightingTheme.SecondaryPanel, Padding = new Padding(16, 14, 16, 10), Margin = Padding.Empty };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         void Add(Control c) { panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); panel.Controls.Add(c, 0, panel.RowCount++); }
         Add(new Label { Text = KbLight.Text.ProgramCaption, AutoSize = true, Font = OwnFont(10, FontStyle.Bold), Margin = new Padding(0, 0, 0, 20) });
@@ -354,7 +354,7 @@ sealed class SettingsForm : Form
     static LinkLabel NewLink(string text, Action open)
     {
         var link = new LinkLabel { Text = text, AutoSize = true, Margin = new Padding(3, 3, 12, 3) };
-        link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = LightingTheme.Accent;
+        link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = LightingTheme.Link;
         link.LinkClicked += (_, _) => open();
         return link;
     }

@@ -1,4 +1,4 @@
-"""Создаёт src/app.ico: графитовая клавиша K с бирюзовым контуром."""
+"""Создаёт src/app.ico: графитовая клавиша K с малиново-фиолетовым контуром."""
 from pathlib import Path
 from PIL import Image, ImageDraw
 
@@ -11,8 +11,8 @@ def render(size: int) -> Image.Image:
     unit = size * scale / 32
     img = Image.new("RGBA", (size * scale, size * scale))
     draw = ImageDraw.Draw(img)
-    accent = (128, 203, 185, 255)
-    graphite = (32, 35, 39, 255)
+    accent = (255, 255, 255, 255)
+    graphite = (32, 29, 36, 255)
     def coords(values):
         return tuple(round(v * unit) for v in values)
     draw.rounded_rectangle(coords((3, 2, 29, 30)), radius=round(5 * unit), fill=accent)
@@ -21,6 +21,14 @@ def render(size: int) -> Image.Image:
     draw.line(coords((11, 9, 11, 23)), fill=accent, width=width)
     draw.line(coords((11, 16, 15, 16)), fill=accent, width=width)
     draw.line(coords((22, 9, 15, 16, 22, 23)), fill=accent, width=width, joint="curve")
+    # Маска контура и буквы отделяется от графитовой внутренней поверхности.
+    pixels = img.load()
+    for x in range(img.width):
+        t = min(1, max(0, (x / unit - 3) / 26))
+        color = tuple(round(a + (b - a) * t) for a, b in zip((250, 45, 76), (191, 47, 223)))
+        for y in range(img.height):
+            if pixels[x, y][:3] == (255, 255, 255):
+                pixels[x, y] = color + (255,)
     return img.resize((size, size), Image.Resampling.LANCZOS)
 
 

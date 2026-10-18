@@ -24,6 +24,8 @@ KbLight escribe tu iluminación en el teclado cuando inicias sesión en Windows,
 
 En **Quiet hours** puedes activar un horario diario que apaga por completo ambas luces. El intervalo inicial es **23:00–09:00** y el horario está desactivado por defecto. Las horas se pueden cambiar y siguen la hora local de Windows. Al terminar se recuperan los ajustes anteriores; una luz apagada manualmente permanece apagada. También puedes editar el brillo diurno durante la noche. El inicio está incluido y el final excluido; horas iguales desactivan el intervalo. KbLight debe estar ejecutándose en la bandeja; no despierta el ordenador y respeta el horario al iniciar, conectar y reanudar. `--apply` y `--check` también lo respetan; si aún falta `LightBox` en el archivo, estos comandos no cambian esa luz: inicia primero la aplicación en la bandeja para guardar sus ajustes.
 
+**Nueva ventana de ajustes (en desarrollo).** La ventana de grafito oscuro tiene tres columnas: teclas, Light box y aplicación. El color se elige en el panel mediante la paleta, colores predefinidos o un valor HEX exacto; también se muestran los valores RGB. Se puede editar una zona apagada sin encenderla; el interruptor y el horario de silencio siguen controlando la luz. El estado y el botón Cerrar permanecen visibles, con desplazamiento en pantallas pequeñas. La ventana siempre usa el tema oscuro.
+
 <p align="center"><img src="docs/images/window-en.png" alt="KbLight settings window" width="416"></p>
 
 ## Instalación

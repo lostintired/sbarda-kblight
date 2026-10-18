@@ -2,45 +2,45 @@ using System.Diagnostics;
 
 namespace KbLight;
 
-/// <summary>Edits the shared <see cref="LightSettings"/> in place; every change raises <see cref="SettingsChanged"/>.</summary>
 sealed class SettingsForm : Form
 {
     readonly LightSettings _settings;
-    readonly CheckBox _enabled = new() { Text = KbLight.Text.KeysEnabled, AutoSize = true };
-    readonly CheckBox _boxEnabled = new() { Text = KbLight.Text.BoxEnabled, AutoSize = true };
-    readonly Label _model = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 8) };
-    readonly ComboBox _effect = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
-    readonly TrackBar _brightness = BrightnessSlider();
+    readonly LightingSwitch _enabled = new() { AccessibleName = KbLight.Text.KeysEnabled };
+    readonly LightingSwitch _boxEnabled = new() { AccessibleName = KbLight.Text.BoxEnabled };
+    readonly Label _model = new() { AutoSize = true, Anchor = AnchorStyles.Right };
+    readonly Label _device = new() { AutoSize = true, MaximumSize = new Size(245, 0), Margin = new Padding(0, 0, 0, 8) };
+    readonly ComboBox _effect = EffectList();
+    readonly LightingSlider _brightness = new();
     readonly Label _brightnessValue = ValueLabel();
-    readonly TrackBar _speed = SpeedSlider();
+    readonly LightingSlider _speed = new() { Maximum = 4 };
     readonly Label _speedValue = ValueLabel();
-    readonly Button _color = ColorButton();
-    readonly CheckBox _multicolor = MulticolorBox();
-    // Light box group (spec light-box), shown only for models that have one.
-    readonly Label _boxTitle = new()
-    {
-        Text = KbLight.Text.LightBoxCaption, AutoSize = true, Font = new Font(DefaultFont, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3),
-    };
-    readonly ComboBox _boxMode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Anchor = AnchorStyles.Left };
-    readonly TrackBar _boxBrightness = BrightnessSlider();
+    readonly LightingColorPicker _color = new(KbLight.Text.KeysCaption);
+    readonly CheckBox _multicolor = Check(KbLight.Text.Multicolor);
+    readonly ComboBox _boxMode = EffectList();
+    readonly LightingSlider _boxBrightness = new();
     readonly Label _boxBrightnessValue = ValueLabel();
-    readonly TrackBar _boxSpeed = SpeedSlider();
+    readonly LightingSlider _boxSpeed = new() { Maximum = 4 };
     readonly Label _boxSpeedValue = ValueLabel();
-    readonly Button _boxColor = ColorButton();
-    readonly CheckBox _boxMulticolor = MulticolorBox();
-    readonly List<Control> _boxRows = [];
-    readonly CheckBox _reverse = new() { Text = KbLight.Text.ReverseDirection, AutoSize = true };
-    readonly CheckBox _autostart = new() { Text = KbLight.Text.StartWithWindows, AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
-    readonly CheckBox _checkUpdates = new() { Text = KbLight.Text.CheckUpdates, AutoSize = true };
-    readonly CheckBox _quietEnabled = new() { Text = KbLight.Text.QuietHoursEnabled, AutoSize = true };
-    readonly DateTimePicker _quietStart = TimePicker();
-    readonly DateTimePicker _quietEnd = TimePicker();
-    readonly Label _quietState = new() { AutoSize = true, MaximumSize = new Size(350, 0) };
-    readonly Label _version = new() { Text = AppVersion.Text, AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 3, 0, 3) };
-    readonly LinkLabel _updateLink = new() { AutoSize = true, Visible = false, Margin = new Padding(0, 3, 3, 3) };
+    readonly LightingColorPicker _boxColor = new(KbLight.Text.LightBoxCaption);
+    readonly CheckBox _boxMulticolor = Check(KbLight.Text.Multicolor);
+    readonly CheckBox _reverse = Check(KbLight.Text.ReverseDirection);
+    readonly CheckBox _autostart = Check(KbLight.Text.StartWithWindows);
+    readonly CheckBox _checkUpdates = Check(KbLight.Text.CheckUpdates);
+    readonly LightingSwitch _quietEnabled = new() { AccessibleName = KbLight.Text.QuietHoursEnabled, Width = 42, ShowStateCaption = false };
+    readonly LightingTimePicker _quietStart = TimePicker();
+    readonly LightingTimePicker _quietEnd = TimePicker();
+    readonly Label _quietState = new() { AutoSize = true, MaximumSize = new Size(240, 0), Margin = new Padding(0, 6, 0, 0) };
+    readonly Label _version = new() { Text = AppVersion.Text, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
+    readonly LinkLabel _updateLink = new() { AutoSize = true, Visible = false, Margin = new Padding(0, 4, 0, 0) };
+    readonly Label _status = new() { AutoSize = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 0, 12, 0) };
+    readonly Panel _body = new() { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(16, 0, 16, 12) };
+    readonly TableLayoutPanel _columns = new() { ColumnCount = 3, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
+    readonly TableLayoutPanel _boxPanel;
+    readonly TableLayoutPanel _footer;
     ReleaseInfo? _update;
-    readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(380, 0), Margin = new Padding(3, 8, 3, 3) };
     bool _loading;
+    bool _fitting;
+    readonly List<Font> _ownedFonts = [];
 
     public event Action? SettingsChanged;
     public event Action<bool>? AutostartToggled;
@@ -49,200 +49,212 @@ sealed class SettingsForm : Form
     public SettingsForm(LightSettings settings, bool autostart)
     {
         _settings = settings;
-
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
+        Font = OwnFont(9);
         Text = KbLight.Text.AppTitle;
         Icon = AppFiles.LoadIcon(32);
+        BackColor = LightingTheme.Background;
+        ForeColor = LightingTheme.Foreground;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        AutoScroll = true;
-        MaximumSize = Screen.FromPoint(Cursor.Position).WorkingArea.Size;
-        Padding = new Padding(12);
-        Shown += (_, _) => FitWorkingArea();
-        DpiChanged += (_, _) => BeginInvoke(FitWorkingArea);
+        ClientSize = new Size(1000, 632);
 
-        var close = new Button { Text = KbLight.Text.Close, AutoSize = true, Anchor = AnchorStyles.Right };
-        close.Click += (_, _) => Close();
-        CancelButton = close;
-        var log = NewLink(KbLight.Text.LogLink, OpenLog);
-        var models = NewLink(KbLight.Text.ModelsLink, OpenModels);
-        var links = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
-        links.Controls.AddRange([log, models]);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(22, 8, 22, 8), Margin = Padding.Empty };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.Controls.Add(new LightingIcon { Glyph = LightingGlyph.Brand, Size = new Size(34, 36), Anchor = AnchorStyles.Left }, 0, 0);
+        var brand = Stack();
+        brand.Controls.Add(new Label { Text = "KbLight", AutoSize = true, Font = OwnFont(17, FontStyle.Bold), Margin = Padding.Empty });
+        brand.Controls.Add(new Label { Text = KbLight.Text.LightingControl, AutoSize = true, Margin = Padding.Empty });
+        header.Controls.Add(brand, 1, 0); header.Controls.Add(_model, 2, 0);
+        layout.Controls.Add(header, 0, 0);
 
-        var colorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        colorRow.Controls.AddRange([_color, _multicolor]);
-        var boxColorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        boxColorRow.Controls.AddRange([_boxColor, _boxMulticolor]);
-        var bottom = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bottom.Controls.Add(links, 0, 0);
-        bottom.Controls.Add(close, 1, 0);
-
-        var grid = new TableLayoutPanel { AutoSize = true, ColumnCount = 3 };
-        for (int i = 0; i < 3; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        grid.Controls.Add(_model, 0, grid.RowCount);
-        grid.SetColumnSpan(_model, 3);
-        grid.RowCount++;
-        AddRow(grid, "", _enabled, span: 2);
-        AddRow(grid, KbLight.Text.EffectCaption, _effect, span: 2);
-        AddRow(grid, KbLight.Text.BrightnessCaption, _brightness, _brightnessValue);
-        AddRow(grid, KbLight.Text.SpeedCaption, _speed, _speedValue);
-        AddRow(grid, KbLight.Text.ColorCaption, colorRow, span: 2);
-        AddRow(grid, "", _reverse, span: 2);
-        grid.Controls.Add(_boxTitle, 0, grid.RowCount);
-        grid.SetColumnSpan(_boxTitle, 3);
-        grid.RowCount++;
-        _boxRows.Add(_boxTitle);
-        _boxRows.AddRange(AddRow(grid, "", _boxEnabled, span: 2));
-        _boxRows.AddRange(AddRow(grid, KbLight.Text.LightBoxModeCaption, _boxMode, span: 2));
-        _boxRows.AddRange(AddRow(grid, KbLight.Text.BrightnessCaption, _boxBrightness, _boxBrightnessValue));
-        _boxRows.AddRange(AddRow(grid, KbLight.Text.SpeedCaption, _boxSpeed, _boxSpeedValue));
-        _boxRows.AddRange(AddRow(grid, KbLight.Text.ColorCaption, boxColorRow, span: 2));
-        var quietTitle = new Label
-        {
-            Text = KbLight.Text.QuietHoursCaption, AutoSize = true, Font = new Font(DefaultFont, FontStyle.Bold),
-            Margin = new Padding(3, 12, 3, 3),
-        };
-        grid.Controls.Add(quietTitle, 0, grid.RowCount++);
-        grid.SetColumnSpan(quietTitle, 3);
-        AddRow(grid, "", _quietEnabled, span: 2);
-        var times = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        times.Controls.AddRange([
-            new Label { Text = KbLight.Text.QuietHoursFrom, AutoSize = true, Margin = new Padding(3, 5, 6, 3) },
-            _quietStart,
-            new Label { Text = KbLight.Text.QuietHoursUntil, AutoSize = true, Margin = new Padding(12, 5, 6, 3) },
-            _quietEnd,
-        ]);
-        AddRow(grid, "", times, span: 2);
-        AddRow(grid, "", new Label { Text = KbLight.Text.QuietHoursHelp, AutoSize = true, MaximumSize = new Size(350, 0) }, span: 2);
-        AddRow(grid, "", _quietState, span: 2);
-        AddRow(grid, "", _autostart, span: 2);
-        AddRow(grid, "", _checkUpdates, span: 2);
-        grid.Controls.Add(_status, 0, grid.RowCount);
-        grid.SetColumnSpan(_status, 3);
-        grid.RowCount++;
-        var versionRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        versionRow.Controls.AddRange([_version, _updateLink]);
-        grid.Controls.Add(versionRow, 0, grid.RowCount);
-        grid.SetColumnSpan(versionRow, 3);
-        grid.RowCount++;
-        grid.Controls.Add(bottom, 0, grid.RowCount);
-        grid.SetColumnSpan(bottom, 3);
-        grid.RowCount++;
-        Controls.Add(grid);
-        ResumeLayout();
-
-        FillEffects();
-        LoadValues(autostart);
-
+        _columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+        _columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+        _columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
+        _columns.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var keys = Zone(KbLight.Text.KeysCaption, LightingGlyph.Keys, _enabled, _effect, _brightness, _brightnessValue, _speed, _speedValue, _color, _multicolor, _reverse);
+        _boxPanel = Zone(KbLight.Text.LightBoxCaption, LightingGlyph.Box, _boxEnabled, _boxMode, _boxBrightness, _boxBrightnessValue, _boxSpeed, _boxSpeedValue, _boxColor, _boxMulticolor, null);
+        _columns.Controls.Add(keys, 0, 0); _columns.Controls.Add(_boxPanel, 1, 0); _columns.Controls.Add(ProgramPanel(), 2, 0);
+        _body.Controls.Add(_columns); layout.Controls.Add(_body, 0, 1);
+        _footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20, 9, 20, 9), Margin = Padding.Empty, BackColor = LightingTheme.Panel };
+        _footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        _footer.Controls.Add(_status, 0, 0);
+        var close = new Button { Text = KbLight.Text.Close, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(46, 52, 58), UseVisualStyleBackColor = false, Margin = new Padding(0, 4, 0, 4) };
+        close.FlatAppearance.BorderColor = LightingTheme.Border;
+        close.Click += (_, _) => Close(); CancelButton = close;
+        _footer.Controls.Add(close, 1, 0); layout.Controls.Add(_footer, 0, 2);
+        Controls.Add(layout);
+        LightingTheme.Apply(this);
+        foreach (var l in new[] { _brightnessValue, _speedValue, _boxBrightnessValue, _boxSpeedValue }) l.ForeColor = LightingTheme.Foreground;
+        FillEffects(); LoadValues(autostart);
         _enabled.CheckedChanged += (_, _) => Edit(() => _settings.Enabled = _enabled.Checked);
         _boxEnabled.CheckedChanged += (_, _) => Edit(() => _settings.LightBoxEnabled = _boxEnabled.Checked);
         _quietEnabled.CheckedChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { Enabled = _quietEnabled.Checked });
         _quietStart.ValueChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { Start = FormatTime(_quietStart) });
         _quietEnd.ValueChanged += (_, _) => Edit(() => _settings.QuietHours = _settings.QuietHours with { End = FormatTime(_quietEnd) });
-        _effect.SelectedIndexChanged += (_, _) => Edit(() => _settings.Effect = ((Effect)_effect.SelectedItem!).Id);
+        _effect.SelectedIndexChanged += (_, _) => { if (_effect.SelectedItem is Effect e) Edit(() => _settings.Effect = e.Id); };
         _brightness.ValueChanged += (_, _) => Edit(() => _settings.Brightness = _brightness.Value);
         _speed.ValueChanged += (_, _) => Edit(() => _settings.Speed = _speed.Value);
         _multicolor.CheckedChanged += (_, _) => Edit(() => _settings.Multicolor = _multicolor.Checked);
         _reverse.CheckedChanged += (_, _) => Edit(() => _settings.ReverseDirection = _reverse.Checked);
-        _color.Click += (_, _) => PickColor(_settings.GetColor(), _settings.SetColor);
-        _boxMode.SelectedIndexChanged += (_, _) => EditBox(b => b with { Mode = ((LightBoxMode)_boxMode.SelectedItem!).Id });
+        _color.ColorChanged += (_, _) => Edit(() => _settings.SetColor(_color.SelectedColor));
+        _boxMode.SelectedIndexChanged += (_, _) => { if (_boxMode.SelectedItem is LightBoxMode m) EditBox(b => b with { Mode = m.Id }); };
         _boxBrightness.ValueChanged += (_, _) => EditBox(b => b with { Brightness = _boxBrightness.Value });
         _boxSpeed.ValueChanged += (_, _) => EditBox(b => b with { Speed = _boxSpeed.Value });
         _boxMulticolor.CheckedChanged += (_, _) => EditBox(b => b with { Multicolor = _boxMulticolor.Checked });
-        _boxColor.Click += (_, _) => PickColor(Box.GetColor(), c => _settings.LightBox = Box with { Rgb = LightSettings.FormatColor(c) });
+        _boxColor.ColorChanged += (_, _) => EditBox(b => b with { Rgb = LightSettings.FormatColor(_boxColor.SelectedColor) });
         _autostart.CheckedChanged += (_, _) => { if (!_loading) AutostartToggled?.Invoke(_autostart.Checked); };
         _checkUpdates.CheckedChanged += (_, _) => { if (!_loading) UpdatesToggled?.Invoke(_checkUpdates.Checked); };
         _updateLink.LinkClicked += (_, _) => { if (_update is not null) UpdateCheck.Open(_update); };
-        if (Application.IsDarkModeEnabled)
-            _updateLink.LinkColor = _updateLink.ActiveLinkColor = _updateLink.VisitedLinkColor = Color.FromArgb(0x60, 0xCD, 0xFF);
+        Shown += (_, _) => FitWorkingArea();
+        DpiChanged += (_, _) => BeginInvoke(FitWorkingArea);
+        _body.SizeChanged += (_, _) => SizeColumns();
+        ResumeLayout(true);
+        SizeColumns();
     }
 
-    public void SetStatus(string text) => _status.Text = text;
+    static ComboBox EffectList() => new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, Margin = Padding.Empty };
+    static CheckBox Check(string caption) => new LightingCheckBox() { Text = caption, AccessibleName = caption, AutoSize = true, MaximumSize = new Size(280, 0), Margin = new Padding(0, 4, 0, 4), UseVisualStyleBackColor = false };
+    static Label ValueLabel() => new() { AutoSize = true, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
+    static LightingTimePicker TimePicker() => new() { Width = 112, Margin = new Padding(0, 4, 0, 0) };
+    static FlowLayoutPanel Stack() => new() { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty, Dock = DockStyle.Top };
+    static Label Caption(string text) => new() { Text = text, AutoSize = true, ForeColor = LightingTheme.Muted, Margin = new Padding(0, 0, 0, 5) };
 
-    public void SetQuietHoursState(QuietHoursState state)
+    TableLayoutPanel Zone(string title, LightingGlyph glyph, LightingSwitch toggle, ComboBox effect, LightingSlider brightness, Label brightnessValue, LightingSlider speed, Label speedValue, LightingColorPicker picker, CheckBox multi, CheckBox? reverse)
     {
-        string text = !state.IsValid ? KbLight.Text.QuietHoursInvalid
-            : state.SameTime ? KbLight.Text.QuietHoursSameTime
-            : state.Active ? KbLight.Text.QuietHoursActive(state.End) : "";
-        if (_quietState.Text != text) _quietState.Text = text;
+        var panel = new TableLayoutPanel { ColumnCount = 1, RowCount = 8, Dock = DockStyle.Fill, BackColor = LightingTheme.Panel, Padding = new Padding(16, 12, 16, 10), Margin = new Padding(0, 0, 12, 0) };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        foreach (int h in new[] { 40, 50, 49, 55, 29, 207, 28 }) panel.RowStyles.Add(new RowStyle(SizeType.Absolute, h));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var head = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = Padding.Empty };
+        head.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38)); head.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); head.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+        head.Controls.Add(new LightingIcon { Glyph = glyph, Anchor = AnchorStyles.Left }, 0, 0);
+        head.Controls.Add(new Label { Text = title, AutoSize = true, Font = OwnFont(10, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 1, 0);
+        toggle.Anchor = AnchorStyles.Right; head.Controls.Add(toggle, 2, 0); panel.Controls.Add(head, 0, 0);
+        var effectRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
+        effectRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        effectRow.RowStyles.Add(new RowStyle(SizeType.Absolute, 20)); effectRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        effectRow.Controls.Add(Caption(glyph == LightingGlyph.Keys ? KbLight.Text.EffectCaption : KbLight.Text.LightBoxModeCaption), 0, 0);
+        effectRow.Controls.Add(effect, 0, 1);
+        panel.Controls.Add(effectRow, 0, 1);
+        panel.Controls.Add(SliderRow(title, KbLight.Text.BrightnessCaption, brightness, brightnessValue), 0, 2);
+        panel.Controls.Add(SliderRow(title, KbLight.Text.SpeedCaption, speed, speedValue), 0, 3);
+        var colors = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        colors.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); colors.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        colors.Controls.Add(Caption(KbLight.Text.ColorCaption), 0, 0); colors.Controls.Add(multi, 1, 0);
+        multi.AccessibleName = title + ": " + KbLight.Text.Multicolor;
+        panel.Controls.Add(colors, 0, 4); picker.Dock = DockStyle.Fill; picker.Margin = Padding.Empty; panel.Controls.Add(picker, 0, 5);
+        if (reverse is not null) panel.Controls.Add(reverse, 0, 6);
+        return panel;
     }
 
+    static TableLayoutPanel SliderRow(string zone, string caption, LightingSlider slider, Label value)
+    {
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 20)); row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        row.Controls.Add(Caption(caption), 0, 0); row.Controls.Add(value, 1, 0);
+        slider.Dock = DockStyle.Fill; slider.Margin = Padding.Empty; slider.AccessibleName = zone + ": " + caption;
+        row.Controls.Add(slider, 0, 1); row.SetColumnSpan(slider, 2);
+        return row;
+    }
+
+    TableLayoutPanel ProgramPanel()
+    {
+        var panel = new TableLayoutPanel { ColumnCount = 1, Dock = DockStyle.Fill, BackColor = Color.FromArgb(28, 31, 35), Padding = new Padding(16, 14, 16, 10), Margin = Padding.Empty };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        void Add(Control c) { panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); panel.Controls.Add(c, 0, panel.RowCount++); }
+        Add(new Label { Text = KbLight.Text.ProgramCaption, AutoSize = true, Font = OwnFont(10, FontStyle.Bold), Margin = new Padding(0, 0, 0, 20) });
+        var quiet = new TableLayoutPanel { Dock = DockStyle.Top, Height = 30, ColumnCount = 2, Margin = Padding.Empty };
+        quiet.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); quiet.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
+        quiet.Controls.Add(new Label { Text = KbLight.Text.QuietHoursCaption, AutoSize = true, Font = OwnFont(9, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 0, 0);
+        quiet.Controls.Add(_quietEnabled, 1, 0); Add(quiet);
+        var times = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Top, Height = 58, Margin = new Padding(0, 4, 0, 0) };
+        times.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); times.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        times.Controls.Add(Caption(KbLight.Text.QuietOffAt), 0, 0); times.Controls.Add(Caption(KbLight.Text.QuietOnAt), 1, 0);
+        _quietStart.AccessibleName = KbLight.Text.QuietOffAt; _quietEnd.AccessibleName = KbLight.Text.QuietOnAt;
+        times.Controls.Add(_quietStart, 0, 1); times.Controls.Add(_quietEnd, 1, 1); Add(times);
+        Add(new Label { Text = KbLight.Text.QuietHoursHelp, AutoSize = true, MaximumSize = new Size(245, 0), Margin = new Padding(0, 5, 0, 0) });
+        Add(_quietState);
+        Add(Section(KbLight.Text.SettingsCaption)); Add(_autostart); Add(_checkUpdates);
+        Add(Section(KbLight.Text.DeviceCaption));
+        Add(_device);
+        var links = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        links.Controls.Add(NewLink(KbLight.Text.LogLink, OpenLog)); links.Controls.Add(NewLink(KbLight.Text.ModelsLink, OpenModels)); Add(links);
+        Add(_version); Add(_updateLink);
+        return panel;
+    }
+    Label Section(string title) => new() { Text = title, AutoSize = true, Font = OwnFont(9, FontStyle.Bold), Margin = new Padding(0, 18, 0, 9) };
+
+    Font OwnFont(float size, FontStyle style = FontStyle.Regular)
+    {
+        var font = new Font("Segoe UI", size, style);
+        _ownedFonts.Add(font);
+        return font;
+    }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        LightingTheme.DarkTitleBar(Handle);
+    }
+    protected override void Dispose(bool disposing)
+    {
+        var icon = disposing ? Icon : null;
+        base.Dispose(disposing);
+        if (!disposing) return;
+        icon?.Dispose();
+        foreach (var font in _ownedFonts) font.Dispose();
+        _ownedFonts.Clear();
+    }
+
+    void SizeColumns()
+    {
+        float s = _boxPanel.RowStyles[0].Height / 40f;
+        _columns.Size = new Size(Math.Max((int)(950 * s), _body.ClientSize.Width - _body.Padding.Horizontal), (int)(490 * s));
+        _columns.Location = new Point(_body.Padding.Left + _body.AutoScrollPosition.X, _body.Padding.Top + _body.AutoScrollPosition.Y);
+    }
     void FitWorkingArea()
     {
-        var area = Screen.FromControl(this).WorkingArea;
-        MaximumSize = area.Size;
-        Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)),
-            Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height)));
+        if (_fitting) return;
+        _fitting = true;
+        try
+        {
+            var area = Screen.FromControl(this).WorkingArea;
+            MaximumSize = area.Size;
+            Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
+            Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)), Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height)));
+            SizeColumns();
+        }
+        finally { _fitting = false; }
     }
-
-    /// <summary>Shows "version N is available" after the version line, or hides it.</summary>
+    public void SetStatus(string text) => _status.Text = text;
+    public void SetQuietHoursState(QuietHoursState state)
+    {
+        _quietState.Text = !state.IsValid ? KbLight.Text.QuietHoursInvalid : state.SameTime ? KbLight.Text.QuietHoursSameTime : state.Active ? KbLight.Text.QuietHoursActive(state.End) : "";
+    }
     public void SetUpdate(ReleaseInfo? release)
     {
         _update = release;
-        _version.Text = release is null ? AppVersion.Text : AppVersion.Text + " ·";
+        _version.Text = AppVersion.Text;
         _updateLink.Text = release is null ? "" : KbLight.Text.UpdateLink(release.Version);
         _updateLink.Visible = release is not null;
     }
+    public void SetAutostart(bool enabled) { _loading = true; _autostart.Checked = enabled; _loading = false; }
 
-    public void SetAutostart(bool enabled)
-    {
-        _loading = true;
-        _autostart.Checked = enabled;
-        _loading = false;
-    }
+    static string FormatTime(LightingTimePicker picker) => picker.Value.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <returns>the controls of the row, to show or hide it as a whole</returns>
-    static List<Control> AddRow(TableLayoutPanel grid, string caption, Control control, Control? extra = null, int span = 1)
-    {
-        int row = grid.RowCount++;
-        var controls = new List<Control> { control };
-        if (caption.Length > 0)
-        {
-            var label = new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 3, 12, 3) };
-            grid.Controls.Add(label, 0, row);
-            controls.Add(label);
-        }
-        grid.Controls.Add(control, 1, row);
-        if (span > 1) grid.SetColumnSpan(control, span);
-        if (extra is not null)
-        {
-            grid.Controls.Add(extra, 2, row);
-            controls.Add(extra);
-        }
-        return controls;
-    }
-
-    static TrackBar BrightnessSlider() => new()
-    {
-        Maximum = 100, SmallChange = 5, LargeChange = 25, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
-    };
-
-    static TrackBar SpeedSlider() => new()
-    {
-        Maximum = 4, LargeChange = 1, TickStyle = TickStyle.None, AutoSize = false, Size = new Size(260, 30),
-    };
-
-    static Label ValueLabel() => new() { AutoSize = true, Anchor = AnchorStyles.Left };
-
-    static Button ColorButton() => new() { FlatStyle = FlatStyle.Flat, Size = new Size(56, 26), Margin = new Padding(3, 3, 12, 3) };
-
-    static CheckBox MulticolorBox() => new() { Text = KbLight.Text.Multicolor, AutoSize = true, Anchor = AnchorStyles.Left };
-
-    static DateTimePicker TimePicker() => new()
-    {
-        Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true, Width = 85,
-    };
-
-    static string FormatTime(DateTimePicker picker) => picker.Value.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-
-    static void LoadTime(DateTimePicker picker, string? text, int fallbackHour)
+    static void LoadTime(LightingTimePicker picker, string? text, int fallbackHour)
     {
         var time = QuietHoursState.TryTime(text, out var parsed) ? parsed : new TimeOnly(fallbackHour, 0);
         picker.Value = DateTime.Today.Add(time.ToTimeSpan());
@@ -263,11 +275,15 @@ sealed class SettingsForm : Form
     {
         var model = KeyboardModels.Find(_settings.Model);
         _model.Text = KbLight.Text.KeyboardLine(model?.Name);
+        _device.Text = KbLight.Text.KeyboardLine(model?.Name) + (model is null ? "" : Environment.NewLine + model.Id);
         _effect.Items.Clear();
         foreach (var effect in (model ?? KeyboardModels.Default)?.Effects ?? []) _effect.Items.Add(effect);
         if (_boxMode.Items.Count == 0) _boxMode.Items.AddRange([.. LightBoxMode.All]);
         bool lightBox = (model ?? KeyboardModels.Default)?.LightBox == true;
-        foreach (var control in _boxRows) control.Visible = lightBox;
+        _boxPanel.Visible = lightBox;
+        _columns.ColumnStyles[1].Width = lightBox ? 34 : 0;
+        _columns.ColumnStyles[0].Width = lightBox ? 34 : 68;
+        _columns.PerformLayout();
     }
 
     /// <summary>The light box the window shows: the saved one, or the defaults until one is taken or edited.</summary>
@@ -310,8 +326,8 @@ sealed class SettingsForm : Form
 
     void UpdateControls()
     {
-        _effect.Enabled = _settings.Enabled;
-        var options = _settings.Enabled ? CurrentEffect()?.Options ?? 0 : 0;
+        _effect.Enabled = true;
+        var options = CurrentEffect()?.Options ?? 0;
         _brightness.Enabled = options.HasFlag(EffectOptions.Brightness);
         _speed.Enabled = options.HasFlag(EffectOptions.Speed);
         _multicolor.Enabled = options.HasFlag(EffectOptions.Multicolor);
@@ -320,40 +336,25 @@ sealed class SettingsForm : Form
 
         _brightnessValue.Text = $"{_brightness.Value}%";
         _speedValue.Text = KbLight.Text.SpeedValue(_speed.Value + 1);
-        ShowSwatch(_color, _settings.GetColor());
+        _color.SelectedColor = _settings.GetColor();
 
-        _boxMode.Enabled = _settings.LightBoxEnabled;
-        var boxOptions = _settings.LightBoxEnabled ? LightBoxMode.Find(Box.Mode).Options : 0;
+        _boxMode.Enabled = true;
+        var boxOptions = LightBoxMode.Find(Box.Mode).Options;
         _boxBrightness.Enabled = boxOptions.HasFlag(EffectOptions.Brightness);
         _boxSpeed.Enabled = boxOptions.HasFlag(EffectOptions.Speed);
         _boxMulticolor.Enabled = boxOptions.HasFlag(EffectOptions.Multicolor);
         _boxColor.Enabled = boxOptions.HasFlag(EffectOptions.Color) && !(_boxMulticolor.Enabled && _boxMulticolor.Checked);
         _boxBrightnessValue.Text = $"{_boxBrightness.Value}%";
         _boxSpeedValue.Text = KbLight.Text.SpeedValue(_boxSpeed.Value + 1);
-        ShowSwatch(_boxColor, Box.GetColor());
+        _boxColor.SelectedColor = Box.GetColor();
         _quietStart.Enabled = _quietEnd.Enabled = _settings.QuietHours.Enabled;
         SetQuietHoursState(QuietHoursState.At(_settings.QuietHours, LocalClock.Now));
-    }
-
-    /// <summary>Paints the color sample; a disabled button gets a muted one.</summary>
-    static void ShowSwatch(Button button, Color color)
-    {
-        button.BackColor = button.Enabled ? color : Color.FromArgb(color.A, (color.R + 128) / 2, (color.G + 128) / 2, (color.B + 128) / 2);
-        button.FlatAppearance.BorderColor = SystemColors.ControlDark;
-    }
-
-    void PickColor(Color current, Action<Color> set)
-    {
-        using var dialog = new ColorDialog { Color = current, FullOpen = true };
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-            Edit(() => set(dialog.Color));
     }
 
     static LinkLabel NewLink(string text, Action open)
     {
         var link = new LinkLabel { Text = text, AutoSize = true, Margin = new Padding(3, 3, 12, 3) };
-        if (Application.IsDarkModeEnabled)
-            link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = Color.FromArgb(0x60, 0xCD, 0xFF);
+        link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = LightingTheme.Accent;
         link.LinkClicked += (_, _) => open();
         return link;
     }

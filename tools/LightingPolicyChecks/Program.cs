@@ -14,6 +14,21 @@ static class Checks
         try
         {
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            if (args.Contains("--preview"))
+            {
+                Application.SetColorMode(SystemColorMode.Dark);
+                var preview = Profile();
+                preview.Multicolor = false;
+                preview.Rgb = "#00EAFF";
+                preview.QuietHours = new();
+                using var window = new SettingsForm(preview, true);
+                window.Text += " — предпросмотр";
+                window.SetStatus("Предпросмотр: изменения в этом окне не затрагивают клавиатуру и ваши настройки.");
+                Application.Run(window);
+                return 0;
+            }
             CheckPolicy();
             CheckSettings();
             CheckBlocks();
@@ -169,29 +184,31 @@ static class Checks
         form.SettingsChanged += () => changes++;
         form.Reload();
         Check("Загрузка окна без правок", changes == 0);
-        Check("Время по умолчанию", Field<DateTimePicker>(form, "_quietStart").Value.Hour == 23 && Field<DateTimePicker>(form, "_quietEnd").Value.Hour == 9);
-        Check("Поля времени отключены", !Field<DateTimePicker>(form, "_quietStart").Enabled);
+        Check("Время по умолчанию", Field<LightingTimePicker>(form, "_quietStart").Value.Hour == 23 && Field<LightingTimePicker>(form, "_quietEnd").Value.Hour == 9);
+        Check("Поля времени отключены", !Field<LightingTimePicker>(form, "_quietStart").Enabled);
         Field<CheckBox>(form, "_enabled").Checked = false;
-        Check("Ручное выключение в окне", !settings.Enabled && !Field<TrackBar>(form, "_brightness").Enabled && Field<TrackBar>(form, "_brightness").Value == 65);
+        Check("Ручное выключение в окне", !settings.Enabled && Field<LightingSlider>(form, "_brightness").Enabled && Field<LightingSlider>(form, "_brightness").Value == 65);
         Field<CheckBox>(form, "_enabled").Checked = true;
         Field<CheckBox>(form, "_boxEnabled").Checked = false;
-        Check("Выключение Light box в окне", !settings.LightBoxEnabled && !Field<ComboBox>(form, "_boxMode").Enabled && settings.LightBox?.Brightness == 35);
+        Check("Выключение Light box в окне", !settings.LightBoxEnabled && Field<ComboBox>(form, "_boxMode").Enabled && settings.LightBox?.Brightness == 35);
         Field<CheckBox>(form, "_boxEnabled").Checked = true;
         Field<CheckBox>(form, "_quietEnabled").Checked = true;
-        Check("Включение расписания в окне", settings.QuietHours.Enabled && Field<DateTimePicker>(form, "_quietStart").Enabled);
+        Check("Включение расписания в окне", settings.QuietHours.Enabled && Field<LightingTimePicker>(form, "_quietStart").Enabled);
         form.SetQuietHoursState(QuietHoursState.At(settings.QuietHours, Night));
         Check("Ночная подпись", Field<Label>(form, "_quietState").Text == KbLight.Text.QuietHoursActive(new(9, 0)));
-        Check("Ночью профиль доступен", Field<TrackBar>(form, "_brightness").Enabled);
+        Check("Ночью профиль доступен", Field<LightingSlider>(form, "_brightness").Enabled);
         settings.QuietHours = settings.QuietHours with { Start = "25:00" };
         form.Reload();
         Check("Ошибка времени видна", Field<Label>(form, "_quietState").Text == KbLight.Text.QuietHoursInvalid);
         settings.QuietHours = new() { Enabled = true, Start = "09:00", End = "09:00" };
         form.Reload();
         Check("Равные времена видны", Field<Label>(form, "_quietState").Text == KbLight.Text.QuietHoursSameTime);
-        Field<DateTimePicker>(form, "_quietStart").Value = DateTime.Today.AddHours(23);
+        Field<LightingTimePicker>(form, "_quietStart").Value = DateTime.Today.AddHours(23);
         Check("Правка времени сохраняется в профиль", settings.QuietHours.Start == "23:00");
         settings.QuietHours = new() { Enabled = true };
         form.Reload();
+        CheckRedesign(form, settings, () => changes);
+        form.SetStatus(KbLight.Text.AppliedAt(KbLight.Text.LightsState(settings.Brightness, settings.LightBox?.Brightness), Day));
         int scaleArg = Array.IndexOf(args, "--scale");
         if (scaleArg >= 0)
         {
@@ -200,7 +217,23 @@ static class Checks
             typeof(SettingsForm).GetMethod("FitWorkingArea", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(form, null);
             Application.DoEvents();
         }
+        int smallArg = Array.IndexOf(args, "--small");
+        if (smallArg >= 0) { form.Size = new Size(800, 560); Application.DoEvents(); }
         Check("Окно помещается по высоте", form.Height <= Screen.FromControl(form).WorkingArea.Height);
+        Check("Окно помещается по ширине", form.Width <= Screen.FromControl(form).WorkingArea.Width);
+        var status = Field<Label>(form, "_status");
+        Check("Состояние закреплено", form.ClientRectangle.Contains(form.RectangleToClient(status.RectangleToScreen(status.ClientRectangle))));
+        var direction = Field<CheckBox>(form, "_reverse");
+        Check("Панель не обрезает направление", direction.Parent!.ClientRectangle.Contains(direction.Bounds));
+        var body = Field<Panel>(form, "_body");
+        foreach (Control control in new Control[] { Field<LightingColorPicker>(form, "_color"), Field<LightingColorPicker>(form, "_boxColor"), Field<CheckBox>(form, "_reverse"), Field<Label>(form, "_version") })
+        {
+            body.ScrollControlIntoView(control); Application.DoEvents();
+            var r = body.RectangleToClient(control.RectangleToScreen(control.ClientRectangle));
+            Check("Поле достижимо прокруткой: " + control.GetType().Name, r.Left >= 0 && r.Top >= 0 && r.Right <= body.ClientSize.Width && r.Bottom <= body.ClientSize.Height);
+        }
+        body.AutoScrollPosition = Point.Empty;
+
         Console.WriteLine($"Окно: DPI={form.DeviceDpi}; размер={form.Width}x{form.Height}; рабочая область={Screen.FromControl(form).WorkingArea.Size}.");
         var close = AllControls(form).OfType<Button>().Single(b => b.Text == KbLight.Text.Close);
         form.ScrollControlIntoView(close);
@@ -216,7 +249,7 @@ static class Checks
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(bottomImage);
         }
-        form.AutoScrollPosition = Point.Empty;
+        body.AutoScrollPosition = Point.Empty;
         Application.DoEvents();
         if (imageArg >= 0)
         {
@@ -229,7 +262,149 @@ static class Checks
             """{"name":"Без Light box","vid":"19F5","pid":"FB2A","interface":1,"effects":[{"id":6,"options":["brightness"]}]}""");
         form.Reload();
         Check("Выключатель Light box скрыт без поддержки модели", !Field<CheckBox>(form, "_boxEnabled").Visible);
+        Check("Колонка Light box освобождена", Field<TableLayoutPanel>(form, "_columns").ColumnStyles[1].Width == 0);
         form.Close();
+        CheckCloseModes();
+    }
+
+    static void CheckRedesign(SettingsForm form, LightSettings settings, Func<int> count)
+    {
+        var keys = Field<LightingColorPicker>(form, "_color");
+        var box = Field<LightingColorPicker>(form, "_boxColor");
+        var hex = Field<TextBox>(keys, "_hex");
+        var effect = Field<ComboBox>(form, "_effect");
+        var mode = Field<ComboBox>(form, "_boxMode");
+        Check("Все эффекты модели сохранены", effect.Items.Count == 20);
+        int edits = count();
+        settings.Multicolor = false;
+        form.Reload();
+        Check("Reload палитры без событий", count() == edits);
+        string boxBefore = settings.LightBox!.Rgb;
+        hex.Text = "0000ff";
+        Check("Корректный HEX нормализован", settings.Rgb == "#0000FF" && hex.Text == "#0000FF");
+        Check("Изменение цвета ровно одно", count() == edits + 1);
+        Check("Цвета зон независимы", settings.LightBox.Rgb == boxBefore);
+        foreach (string invalid in new[] { "#12", "#ZZZZZZ", "", "#-12345", "##12345" })
+        {
+            edits = count(); hex.Text = invalid;
+            Check("Неверный HEX не сохраняется: " + invalid, settings.Rgb == "#0000FF" && count() == edits);
+            Check("Ошибка HEX видна: " + invalid, Field<Label>(keys, "_error").Text == KbLight.Text.HexInvalid);
+            typeof(Control).GetMethod("OnLeave", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(hex, [EventArgs.Empty]);
+            Check("Возврат правильного HEX: " + invalid, hex.Text == "#0000FF" && count() == edits);
+        }
+        foreach (string color in new[] { "#000000", "#FFFFFF", "#808080", "#FF0000", "#00FF00", "#0000FF" })
+        {
+            hex.Text = color;
+            Check("Точный цвет " + color, settings.Rgb == color && LightSettings.FormatColor(keys.SelectedColor) == color);
+        }
+        Field<CheckBox>(form, "_enabled").Checked = false;
+        Field<LightingSlider>(form, "_brightness").Value = 40;
+        Check("Правка выключенной зоны", !settings.Enabled && settings.Brightness == 40 && LightingPolicy.At(settings, Day).KeysOff);
+        Check("Выключенная зона не блокирует палитру", keys.Enabled);
+        Field<CheckBox>(form, "_enabled").Checked = true;
+        Check("Возврат отредактированного профиля", settings.Brightness == 40 && !LightingPolicy.At(settings, Day).KeysOff);
+        foreach (Effect e in effect.Items)
+        {
+            effect.SelectedItem = e;
+            var options = e.Options;
+            Check("Яркость эффекта " + e.Id, Field<LightingSlider>(form, "_brightness").Enabled == options.HasFlag(EffectOptions.Brightness));
+            Check("Скорость эффекта " + e.Id, Field<LightingSlider>(form, "_speed").Enabled == options.HasFlag(EffectOptions.Speed));
+            Check("Цвет эффекта " + e.Id, keys.Enabled == options.HasFlag(EffectOptions.Color));
+            Check("Направление эффекта " + e.Id, Field<CheckBox>(form, "_reverse").Enabled == ((options & EffectOptions.AnyDirection) != 0));
+        }
+        foreach (LightBoxMode m in mode.Items)
+        {
+            mode.SelectedItem = m;
+            Check("Яркость режима " + m.Id, Field<LightingSlider>(form, "_boxBrightness").Enabled == m.Options.HasFlag(EffectOptions.Brightness));
+            Check("Скорость режима " + m.Id, Field<LightingSlider>(form, "_boxSpeed").Enabled == m.Options.HasFlag(EffectOptions.Speed));
+            Check("Цвет режима " + m.Id, box.Enabled == m.Options.HasFlag(EffectOptions.Color));
+        }
+        mode.SelectedIndex = 3;
+        Field<CheckBox>(form, "_boxEnabled").Checked = false;
+        Field<TextBox>(box, "_hex").Text = "#123ABC";
+        Check("Цвет выключенного Light box", settings.LightBox.Rgb == "#123ABC" && !settings.LightBoxEnabled && LightingPolicy.At(settings, Day).BoxOff);
+        Field<CheckBox>(form, "_boxEnabled").Checked = true;
+        effect.SelectedItem = effect.Items.Cast<Effect>().Single(e => e.Id == 6);
+        Field<CheckBox>(form, "_multicolor").Checked = true;
+        Check("Разноцветный отключает палитру", !keys.Enabled && Field<CheckBox>(form, "_reverse").Enabled);
+        Field<CheckBox>(form, "_multicolor").Checked = false;
+        int autostart = 0, updates = 0;
+        form.AutostartToggled += _ => autostart++;
+        form.UpdatesToggled += _ => updates++;
+        edits = count();
+        Field<CheckBox>(form, "_autostart").Checked = true;
+        Field<CheckBox>(form, "_checkUpdates").Checked = true;
+        Check("Служебные флажки не пишут свет", count() == edits && autostart == 1 && updates == 1);
+        form.SetAutostart(false);
+        Check("Внешний автозапуск без обратного события", autostart == 1 && count() == edits);
+        form.SetUpdate(new ReleaseInfo(new Version(9, 9, 9), "https://example.invalid"));
+        Check("Ссылка обновления видна", Field<LinkLabel>(form, "_updateLink").Visible);
+        form.SetUpdate(null);
+        Check("Ссылка обновления скрывается", !Field<LinkLabel>(form, "_updateLink").Visible);
+        var slider = Field<LightingSlider>(form, "_speed");
+        slider.Focus();
+        int before = slider.Value;
+        typeof(LightingSlider).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(slider, [new KeyEventArgs(Keys.Left)]);
+        Check("Ползунок с клавиатуры", slider.Value == Math.Max(0, before - 1));
+        Check("Доступное имя ползунка", !string.IsNullOrEmpty(slider.AccessibilityObject.Name));
+        var field = AllControls(keys).Single(c => c.GetType().Name == "ColorField");
+        hex.Text = "#FF0000";
+        typeof(Control).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(field, [new KeyEventArgs(Keys.Down)]);
+        Check("Поле цвета с клавиатуры", settings.Rgb != "#FF0000");
+        var time = Field<LightingTimePicker>(form, "_quietStart");
+        time.Value = Day.Date.AddHours(23);
+        typeof(LightingTimePicker).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(time, [new KeyEventArgs(Keys.Up)]);
+        Check("Время с клавиатуры через полночь", time.Value.Hour == 0 && settings.QuietHours.Start == "00:00");
+        settings.Brightness = 65; settings.Effect = 6; settings.Speed = 2; settings.Rgb = "#00EAFF";
+        settings.LightBox = new() { Mode = 3, Brightness = 35, Speed = 2, Rgb = "#FF8000", Multicolor = false };
+        settings.QuietHours = new();
+        form.Reload();
+        Check("Тема графитовая", form.BackColor == LightingTheme.Background);
+        Check("Три колонки", Field<TableLayoutPanel>(form, "_columns").ColumnCount == 3);
+        var toggle = Field<CheckBox>(form, "_enabled");
+        bool wasOn = toggle.Checked;
+        toggle.AccessibilityObject.DoDefaultAction(); Application.DoEvents();
+        Check("Переключатель через доступное действие", toggle.Checked != wasOn && settings.Enabled == toggle.Checked);
+        toggle.Checked = true;
+        int beforeReload = count();
+        settings.Model = "FFFF:FFFF";
+        form.Reload();
+        Check("Неизвестная модель не объявлена подключённой", Field<Label>(form, "_model").Text == KbLight.Text.KeyboardLine(null));
+        form.SetStatus(KbLight.Text.StatusNotFound);
+        Check("Отключение отражено состоянием", Field<Label>(form, "_status").Text == KbLight.Text.StatusNotFound);
+        foreach (string status in new[] { KbLight.Text.Applying, KbLight.Text.StatusFailed("USB"), KbLight.Text.StatusUnsupported("FFFF:FFFF") })
+        {
+            form.SetStatus(status);
+            Check("Состояние передано без подмены", Field<Label>(form, "_status").Text == status);
+        }
+        settings.Model = "19F5:FB2A"; form.Reload();
+        Check("Внешняя модель без записи", count() == beforeReload);
+
+        var reverse = Field<CheckBox>(form, "_reverse");
+        Check("Направление не обрезано панелью", reverse.Parent!.ClientRectangle.Contains(reverse.Bounds));
+
+    }
+
+    static void CheckCloseModes()
+    {
+        foreach (string mode in new[] { "button", "escape", "caption" })
+        {
+            var profile = Profile();
+            using var window = new SettingsForm(profile, false);
+            window.ShowInTaskbar = false; window.Show(); Application.DoEvents();
+            int changes = 0; window.SettingsChanged += () => changes++;
+            Field<LightingSlider>(window, "_brightness").Value = 42;
+            if (mode == "button") AllControls(window).OfType<Button>().Single(b => b.Text == KbLight.Text.Close).PerformClick();
+            else if (mode == "escape") typeof(Form).GetMethod("ProcessDialogKey", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [Keys.Escape]);
+            else
+            {
+                object[] message = [Message.Create(window.Handle, 0x0112, 0xF060, 0)];
+                typeof(Form).GetMethod("WndProc", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, message);
+            }
+            Application.DoEvents();
+            Check("Закрытие окна " + mode, window.IsDisposed);
+            Check("Правка перед закрытием " + mode, changes == 1 && profile.Brightness == 42);
+        }
     }
 
     static IEnumerable<Control> AllControls(Control parent)

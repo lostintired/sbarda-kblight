@@ -1,35 +1,30 @@
-"""Builds src/app.ico: keyboard glyph (Segoe Fluent Icons) on a gradient rounded square."""
+"""Создаёт src/app.ico: графитовая клавиша K с бирюзовым контуром."""
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-GLYPH = "\uE765"  # KeyboardClassic
-FONT = r"C:\Windows\Fonts\SegoeIcons.ttf"
 SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 OUT = Path(__file__).resolve().parent.parent / "src" / "app.ico"
 
 
 def render(size: int) -> Image.Image:
-    scale = 4  # supersample, then downscale for smooth edges
-    s = size * scale
-    grad = Image.new("RGBA", (s, s))
-    top, bottom = (124, 77, 255), (0, 184, 212)
-    px = grad.load()
-    for y in range(s):
-        for x in range(s):
-            t = (x + y) / (2 * (s - 1))
-            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)) + (255,)
-    mask = Image.new("L", (s, s), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, s - 1, s - 1), radius=round(s * 0.22), fill=255)
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    img.paste(grad, (0, 0), mask)
-
-    font = ImageFont.truetype(FONT, round(s * 0.66))
+    scale = 8
+    unit = size * scale / 32
+    img = Image.new("RGBA", (size * scale, size * scale))
     draw = ImageDraw.Draw(img)
-    l, t, r, b = draw.textbbox((0, 0), GLYPH, font=font)
-    draw.text(((s - (r - l)) / 2 - l, (s - (b - t)) / 2 - t), GLYPH, font=font, fill=(255, 255, 255, 255))
-    return img.resize((size, size), Image.LANCZOS)
+    accent = (128, 203, 185, 255)
+    graphite = (32, 35, 39, 255)
+    def coords(values):
+        return tuple(round(v * unit) for v in values)
+    draw.rounded_rectangle(coords((3, 2, 29, 30)), radius=round(5 * unit), fill=accent)
+    draw.rounded_rectangle(coords((5, 4, 27, 28)), radius=round(3 * unit), fill=graphite)
+    width = max(1, round(2.5 * unit))
+    draw.line(coords((11, 9, 11, 23)), fill=accent, width=width)
+    draw.line(coords((11, 16, 15, 16)), fill=accent, width=width)
+    draw.line(coords((22, 9, 15, 16, 22, 23)), fill=accent, width=width, joint="curve")
+    return img.resize((size, size), Image.Resampling.LANCZOS)
 
 
-frames = [render(n) for n in SIZES]
-frames[-1].save(OUT, format="ICO", sizes=[(n, n) for n in SIZES], append_images=frames[:-1])
-print("wrote", OUT)
+if __name__ == "__main__":
+    frames = [render(n) for n in SIZES]
+    frames[-1].save(OUT, format="ICO", sizes=[(n, n) for n in SIZES], append_images=frames[:-1])
+    print("Создан", OUT)

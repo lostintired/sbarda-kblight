@@ -19,6 +19,21 @@ static class Text
 
     static string T(string ru, string en) => Ru ? ru : en;
 
+    public static string KeysCaption => T("Клавиши", "Keys");
+    public static string ProgramCaption => T("Программа", "Application");
+    public static string SettingsCaption => T("Настройки", "Settings");
+    public static string DeviceCaption => T("Устройство", "Device");
+    public static string LightingControl => T("Управление подсветкой", "Lighting control");
+    public static string SwitchOn => T("Вкл.", "On");
+    public static string SwitchOff => T("Выкл.", "Off");
+    public static string QuietOffAt => T("Выключить в", "Turn off at");
+    public static string QuietOnAt => T("Включить в", "Turn on at");
+    public static string HueCaption => T("Оттенок", "Hue");
+    public static string SaturationCaption => T("Насыщенность", "Saturation");
+    public static string ColorValueCaption => T("Яркость цвета", "Color value");
+    public static string HexInvalid => T("Введите 6 цифр HEX, например #FF8000", "Enter 6 HEX digits, for example #FF8000");
+    public static string ColorPreset(string hex) => T("Цвет ", "Color ") + hex;
+
     // Window and menu
     public static string AppTitle => T("Подсветка клавиатуры", "Keyboard Lighting");
     public static string KeyboardLine(string? name) => T("Клавиатура: ", "Keyboard: ") + (name ?? T("не определена", "unknown"));

@@ -38,7 +38,7 @@ static class Program
         }
 
         ApplicationConfiguration.Initialize();
-        Application.SetColorMode(SystemColorMode.System);
+        Application.SetColorMode(SystemColorMode.Dark);
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         using var app = new TrayApp(showSettings: mode != "--tray");
         Application.Run(app);
